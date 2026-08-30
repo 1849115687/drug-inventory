@@ -1,0 +1,5 @@
+{
+  "appId": "com.xiaodian.druginventory",
+  "appName": "药品库存管理",
+  "webDir": "deploy-dist"
+}
