@@ -9,7 +9,7 @@
 | 功能 | 说明 |
 |---|---|
 | 库存台账 | 添加/编辑/删除药品（名称、**规格可选**、**单位输入框+常用建议【盒/瓶/支】可自定义**、库存量、预警阈值，默认阈值 5）；库存 ≤ 阈值红色高亮，负库存显示「欠 N」 |
-| 条码扫码 | 药品可设置**条码**（一药一码）；**添加药品表单**扫码自动填入条码（码已收录时提示对应药品）；**登记销售页「📷 扫码选药」**扫码直接命中并选中库存中该条码药品（过期药品阻止；未收录提示先添加）；浏览器原生 BarcodeDetector 优先、html5-qrcode CDN 懒加载降级，**APK 内走 Capacitor 原生扫码插件（系统摄像头）**，纯本地匹配不联网 |
+| 条码扫码 | 药品可设置**条码**（一药一码）；**添加药品表单**扫码自动填入条码（码已收录时提示对应药品）；**登记销售页「📷 扫码选药」**扫码直接命中并选中库存中该条码药品（过期药品阻止；未收录提示先添加）；浏览器原生 BarcodeDetector 优先、html5-qrcode CDN 懒加载降级，**APK 内走 Cordova 原生扫码插件（系统摄像头，phonegap-plugin-barcodescanner）**，纯本地匹配不联网 |
 | 价格管理 | 药品可设置进价/卖出价（元，两位小数，可留空）；库存列表显示卖出价（无价格显示「—」） |
 | 有效期管理 | 药品可设置「有效期至」（日期，可空）；列表显示有效期，**临期（≤90 天）橙色标记、已过期红色标记**；**过期药品在销售（手动下拉不可选 + OCR 确认列表阻止 + 扫码命中阻止）时提示并阻止** |
 | 登记销售 | 手动选择**药品 + 耗材混选**（可搜索，每项标注类型 + 库存 + 卖价；过期药品不可选）+ 数量 → 自动扣减库存/存量并记入销售记录（标注药品/耗材类型）；选后自动带出当前卖价（可修改），成功提示含金额；库存不足不阻止，可扣为负数并提示 |
@@ -30,13 +30,13 @@ js/storage.js         localStorage 读写 + 导出/导入（纯逻辑，可单�
 js/parser.js          OCR 行解析 + 条目匹配（纯函数，可单测）
 js/ocr.js             Tesseract.js CDN 懒加载 + 图片预处理 + 识别
 js/stats.js           销售/成本/毛利 + 耗材使用统计聚合（纯函数，可单测）
-js/scanner.js         条码扫码封装（浏览器 BarcodeDetector → html5-qrcode 降级；APK 走 Capacitor 原生插件；纯函数可单测）
+js/scanner.js         条码扫码封装（浏览器 BarcodeDetector → html5-qrcode 降级；APK 走 Cordova 原生插件；纯函数可单测）
 js/app.js             状态管理、渲染、事件绑定、OCR 确认流程状态机、扫码流程
 serve.js              零依赖静态服务器（本地/局域网访问用，需 Node.js）
 manifest.webmanifest  PWA 清单
 sw.js                 Service Worker（precache + 缓存优先）
 icons/                应用图标（SVG / 192 / 512 / apple-touch-icon 180）
-package.json          APK 构建依赖（@capacitor/*，仅 GitHub Actions 云端 CI 使用）
+package.json          APK 构建依赖（@capacitor/* + phonegap-plugin-barcodescanner，仅 GitHub Actions 云端 CI 使用）
 capacitor.config.json APK 配置（webDir=deploy-dist、appId、appName）
 .github/workflows/    APK 云端构建（push / 手动触发 → 产出可安装 APK）
 docs/                 需求 / 设计 / 测试文档
@@ -112,7 +112,7 @@ node serve.js
 ## 条码扫码使用说明
 
 - **入口**：①「库存」→ 添加/编辑药品弹层中的「📷 扫码」按钮（扫到即自动填入条码字段）；②「登记销售」页「📷 扫码选药」按钮（扫到即匹配并选中库存中该条码的药品，可直接填数量确认扣减；未收录会提示先添加并录入条码；命中药品已过期会阻止并提示）。
-- **实现**：浏览器优先使用原生 `BarcodeDetector`（Android Chrome 支持）；不支持时自动**联网懒加载**备用扫码库 html5-qrcode（CDN，类似 OCR 模式）。**APK 内不走网页摄像头**（WebView 不支持），自动切换为 **Capacitor 原生扫码插件**（`@capacitor/barcode-scanner`，系统摄像头全屏扫码，ZXing 本地解码、无需 Google Play 服务，国内手机可用）。扫码画面与码值**仅本地处理，不联网、不查外部药品库**（纯本地匹配自己库存中的条码字段）。
+- **实现**：浏览器优先使用原生 `BarcodeDetector`（Android Chrome 支持）；不支持时自动**联网懒加载**备用扫码库 html5-qrcode（CDN，类似 OCR 模式）。**APK 内不走网页摄像头**（WebView 不支持），自动切换为 **Cordova 原生扫码插件**（`phonegap-plugin-barcodescanner`，系统摄像头全屏扫码，ZXing 随插件 AAR 内置打包、无需 JitPack/Google Play 服务，国内手机可用）。扫码画面与码值**仅本地处理，不联网、不查外部药品库**（纯本地匹配自己库存中的条码字段）。
 - **环境要求**：浏览器扫码依赖摄像头，需在 **HTTPS 或 localhost** 环境使用（浏览器安全限制），并授权摄像头权限；权限被拒绝或无摄像头时，弹层会提示改用「手动输入条码」。桌面 Chrome/Edge 在 HTTPS 站点下同样可扫码。**APK 内扫码无 HTTPS 限制**，首次使用会弹出系统相机权限申请，拒绝后同样可改用「手动输入条码」。
 - 条码为可选字段，**一药一码**（重复条码会被拒绝）；二维码内容同样支持（统一按字符串存储）。
 
@@ -130,7 +130,7 @@ node serve.js
 - **安装**：把 APK 传到手机（数据线/网盘/微信文件传输助手），点击安装——需允许「安装未知来源应用」（调试签名，个人使用足够）。
 - **更新**：修改功能并推送后重新触发构建（`workflow_dispatch` 手动触发或 push 自动），下载新 APK 覆盖安装即可（APK 内 WebView 数据通常保留）。
 - **数据迁移**：APK 内数据存于其 WebView 的 localStorage，**与网页版互相独立**。网页版 ↔ APK 之间用「导出备份 / 导入备份」迁移：网页版导出 JSON → 文件传到手机 → APK 内「⋮ → 导入备份」恢复（反之亦然）。
-- **注意**：APK 内扫码走 **Capacitor 原生摄像头插件**（系统相机全屏扫码，ZXing 本地解码、不依赖 Google Play 服务；构建时已注入 CAMERA 权限，首次扫码会弹出系统权限申请）；OCR 在 APK 内也会自动申请相机权限。APK 为补充交付，网页版 PWA 仍是体积最小、自动更新的首选。
+- **注意**：APK 内扫码走 **Cordova 原生摄像头插件**（`phonegap-plugin-barcodescanner`，系统相机全屏扫码，ZXing 随插件 AAR 内置打包、不依赖 Google Play 服务；构建时已注入 CAMERA 权限，首次扫码会弹出系统相机权限申请，**无需「修改系统设置」特殊权限**）；OCR 在 APK 内也会自动申请相机权限。APK 为补充交付，网页版 PWA 仍是体积最小、自动更新的首选。
 
 ## 运行测试
 
@@ -149,7 +149,7 @@ node --test tests/storage.test.js
 node --test tests/scanner.test.js
 ```
 
-测试覆盖 `parser.js`（§3.5 解析规则）、`storage.js`（schema、药品/耗材 CRUD、销售（药品+耗材）、医疗操作、有效期、条码唯一性、导入导出版本校验、售价快照、加载归一化，localStorage 用 mock）、`scanner.js`（BarcodeDetector 可用性、码值归一化、条码匹配、CDN 降级加载、扫码会话）与 `stats.js`（销售额/成本/毛利/毛利率、按日期/按条目聚合、排序、耗材使用统计、分位精度）。
+测试覆盖 `parser.js`（§3.5 解析规则）、`storage.js`（schema、药品/耗材 CRUD、销售（药品+耗材）、医疗操作、有效期、条码唯一性、导入导出版本校验、售价快照、加载归一化，localStorage 用 mock）、`scanner.js`（isCordova 原生环境检测、BarcodeDetector 可用性、码值归一化、条码匹配、CDN 降级加载、扫码会话）与 `stats.js`（销售额/成本/毛利/毛利率、按日期/按条目聚合、排序、耗材使用统计、分位精度）。
 
 ## 浏览器要求
 
