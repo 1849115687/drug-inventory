@@ -210,7 +210,7 @@ idle
 ```
 
 - **纯本地**：只匹配自己库存中的条码字段，不联网、不查外部药品库（用户确认：先不做联网识别）；
-- **依赖**：`BarcodeDetector`（Android Chrome 支持）优先；不可用时懒加载 `html5-qrcode`（CDN，类似 OCR 模式，失败可重试/放弃）；**APK/Capacitor 环境**（WebView 无 BarcodeDetector、getUserMedia 实测不可用）→ 走原生扫码插件 `@capacitor/barcode-scanner`（scanner.js 通过 Capacitor 桥接调用系统摄像头，D26）；
+- **依赖**：`BarcodeDetector`（Android Chrome 支持）优先；不可用时懒加载 `html5-qrcode`（CDN，类似 OCR 模式，失败可重试/放弃）；**APK/Capacitor 环境**（WebView 无 BarcodeDetector、getUserMedia 实测不可用）→ 走原生扫码 `phonegap-plugin-barcodescanner`（8.1.0，cordova-plugin-barcodescanner 的维护版；**ZXing 随插件 AAR 内置打包，无 JitPack/Google 服务依赖**；scanner.js 经 `window.cordova.plugins.barcodeScanner` 调用，D26）；
 - **隐私**：扫码画面仅本地处理，不上传（符合 N6）。
 
 ### 3.8 桌面端适配（US-16，纯样式/文案，不改 schema）
@@ -226,9 +226,9 @@ idle
 - **原理**：GitHub Actions（ubuntu runner 自带 Android SDK/JDK/Java）用 **Capacitor** 把网页版（webDir = `deploy-dist`）包装成 Android WebView 应用，`gradlew assembleDebug` 产出**调试签名 APK**（约 15~20MB，个人使用足够）；
 - **仓库结构**（**定案：与主仓库同仓库** `.github/workflows/build-apk.yml`；独立仓库 `drug-inventory-apk` 为备选）：
   - `capacitor.config.json`：`webDir: "deploy-dist"`、`appId: com.xiaodian.druginventory`、`appName: 药品库存管理`；
-  - `package.json`：`@capacitor/core`、`@capacitor/cli`、`@capacitor/android`、`@capacitor/barcode-scanner`（仅构建依赖；后者供 APK 原生扫码，D26——**官方插件**，替代已归档且无 Capacitor 6 版本的社区插件 `@capacitor-community/barcode-scanner`，`native.android.scanningLibrary='zxing'` 免 Google Play 服务）；
+  - `package.json`：`@capacitor/core`、`@capacitor/cli`、`@capacitor/android`、`phonegap-plugin-barcodescanner`（仅构建依赖；后者供 APK 原生扫码，D26——**8.1.0 为 cordova-plugin-barcodescanner 的维护版：ZXing 随插件 AAR 内置、无 0.7.4 的「修改系统设置」write-settings 关卡、正常申请 CAMERA 权限、支持 config，JS API 相同**；替代不可用的 `@capacitor/barcode-scanner`：其 ZXing 依赖为 OutSystems 私有库（JitPack 401）、ML Kit 需 Google 服务）；
   - `.github/workflows/build-apk.yml`：push 触发 → checkout → setup-node → `npm ci` → `npx cap add android` → `npx cap sync` → `cd android && ./gradlew assembleDebug` → `actions/upload-artifact` 产出 APK（+ `workflow_dispatch` 手动触发）。**幂等与同步**：android/ 不提交、每次全新生成（`cap add` 前检查目录不存在）；**deploy-dist 随仓库提交**并与网页源码保持同步（或 workflow 在 `cap sync` 前先复制网页文件到 deploy-dist）；`cap add` 后注入 CAMERA 权限（见下）；
-- **权限与扫码**：Capacitor 默认 manifest **仅含 INTERNET**——workflow 在 `cap add` 后向 `AndroidManifest.xml` 注入 `<uses-permission android:name="android.permission.CAMERA"/>`（原生扫码插件 `@capacitor/barcode-scanner` 亦自带 CAMERA 声明），并同步将 `android/variables.gradle` 的 `minSdkVersion` 提升到 **26**（官方插件要求）；**APK 内扫码不走网页摄像头**（WebView 不支持 getUserMedia，实测确认），scanner.js 检测到 Capacitor 环境时调用原生插件（D26）；数据存 APK 内 WebView 的 localStorage，**与网页版互相独立**（导出/导入迁移）；
+- **权限与扫码**：Capacitor 默认 manifest **仅含 INTERNET**——workflow 在 `cap add` 后向 `AndroidManifest.xml` 注入 `<uses-permission android:name="android.permission.CAMERA"/>`（cordova 扫码插件亦自带 CAMERA 声明；**8.1.0 无 0.7.4 的 write-settings 关卡——旧版首次扫码会启动「修改系统设置」特殊权限页并报错，国内 ROM 必踩，D26 已换维护版**；workflow 现有 minSdk 提升至 26 步骤对 cordova 插件无害，保留）；**APK 内扫码不走网页摄像头**（WebView 不支持 getUserMedia，实测确认），scanner.js 检测到 cordova/Capacitor 环境时调用 `cordova.plugins.barcodeScanner`（D26；**ZXing 随插件 AAR 内置，无需 JitPack/Google 服务**）；数据存 APK 内 WebView 的 localStorage，**与网页版互相独立**（导出/导入迁移）；
 - **说明**：本机无 Android SDK，**APK 构建无法本地验证**——由 Actions 云端构建结果验证（构建失败时迭代修复 workflow）；APK 为补充交付，网页版 PWA 仍是体积最小、自动更新的首选。
 
 ## 4. 受影响文件清单
@@ -243,7 +243,7 @@ drug-inventory-app/
 ├── js/parser.js                   # 不变（空规格药品按名称匹配）
 ├── js/ocr.js                      # 不变
 ├── js/stats.js                    # 不变
-├── js/scanner.js                  # v4 新增：扫码封装（BarcodeDetector → html5-qrcode 降级；APK 走 Capacitor 原生插件，D26）
+├── js/scanner.js                  # v4 新增：扫码封装（BarcodeDetector → html5-qrcode 降级；APK 走 cordova 原生插件，D26）
 ├── js/app.js                      # v4：扫码流程、单位/规格表单改造
 ├── manifest.webmanifest
 ├── sw.js                          # v4：CACHE_VERSION v4、precache 增加 js/scanner.js
@@ -359,7 +359,7 @@ drug-inventory-app/
 | D23 | 桌面端 = 响应式布局增强（不改 schema/版本号）；保持极小体积（约 165KB），不做压缩/构建步骤 | 用户确认（US-16） |
 | D24 | APK 打包 = Capacitor + GitHub Actions 云端构建（调试签名），本机不装 Android SDK；**定案：与主仓库同仓库 `.github/workflows/`（单一用户更简单），独立仓库为备选** | 用户确认（US-17 路线 A） |
 | D25 | 导出 formatVersion 升为 4；导入同时接受 v1/v2/v3/v4（旧文件新增数据为空：barcode→null 等） | 与 D11/D14/D19 同策略（US-6） |
-| D26 | APK 内扫码 = Capacitor 原生插件 **`@capacitor/barcode-scanner`**（官方插件；原定社区插件 `@capacitor-community/barcode-scanner` 已于 2024-10 归档、无 Capacitor 6 版本，官方插件为其指定后继，peerDep `@capacitor/core ^6`；Android 侧强制 `native.android.scanningLibrary='zxing'` 纯本地解码，无需 Google Play 服务）（WebView 无 BarcodeDetector、getUserMedia 实测不可用） | 评审风险实测落地（US-15/US-17） |
+| D26 | APK 内扫码 = `phonegap-plugin-barcodescanner`（**8.1.0，cordova-plugin-barcodescanner 的维护版**；**ZXing 以 AAR 内置打包（flatDir 引用），无 JitPack/Google 服务依赖**；**无 0.7.4 的 write-settings 关卡**——旧版 Android 6+ 首次扫码会启动「修改系统设置」特殊权限页并报错（`Settings.System.canWrite()`），国内 ROM 非开发者用户必踩，8.1.0 正常申请 CAMERA 权限、支持 config（preferFrontCamera/showFlipCameraButton）；**JS API 与 0.7.4 相同**：`cordova.plugins.barcodeScanner.scan(success, err, config)`；官方 `@capacitor/barcode-scanner` 实测不可用：其 ZXing 依赖 `com.github.outsystems:osbarcode-android` 为 OutSystems 私有库——JitPack 401，ML Kit 选项需 GMS）（WebView 无 BarcodeDetector、getUserMedia 实测不可用） | 评审风险实测落地（US-15/US-17）+ 替换 0.7.4（write-settings 关卡） |
 
 ## 7. 风险与缓解
 
@@ -376,7 +376,7 @@ drug-inventory-app/
 | 过期药品被售出 | 健康风险 | 临期/过期高亮标记（AC40）；过期药品销售阻止（AC41）；有效期漏录则无提醒（如实说明） |
 | 操作关联耗材误选/漏选 | 耗材存量与统计失真 | 操作确认后才写入（复用 D5 精神）；明细可编辑、行可删 |
 | 日期跨时区/格式错误 | 临期/过期判断错误 | 有效期以本地日期字符串 YYYY-MM-DD 存储，判断用本地时区当日 0 点 |
-| 摄像头兼容性差异 | 扫码不可用 | 浏览器：BarcodeDetector 优先 + html5-qrcode 降级；**APK：原生插件（D26）**；扫码失败/无权限 → 手动输入条码兜底 |
+| 摄像头兼容性差异 | 扫码不可用 | 浏览器：BarcodeDetector 优先 + html5-qrcode 降级；**APK：cordova 原生插件（D26，ZXing 内置）**；扫码失败/无权限 → 手动输入条码兜底 |
 | 条码误绑/扫错码 | 销售选错药品 | 扫码命中后仍在确认列表可见可改（与 OCR 一致的人工确认精神） |
 | APK 云端构建失败（版本/依赖变动） | 无法产出 APK | workflow 含 workflow_dispatch 手动触发 + Actions 日志可查，迭代修复；网页版不受影响 |
 | APK 数据与网页版割裂 | 用户困惑 | README 明确「导出/导入迁移」说明；APK 为补充，PWA 为主 |
