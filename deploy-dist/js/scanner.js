@@ -1,18 +1,20 @@
 /**
  * scanner.js — 条码扫码封装（design.md §3.7，US-15）
  *
- * 纯本地方案（D22）：
- *   - 原生 BarcodeDetector 优先（Android Chrome 支持）；不可用时 CDN 懒加载 html5-qrcode 降级；
+ * 纯本地方案（D22/D26）：
+ *   - APK/Capacitor 环境（WebView 无 BarcodeDetector、getUserMedia 不可用，实测确认）
+ *     → 调用原生扫码插件 @capacitor/barcode-scanner 的系统摄像头（D26）；
+ *   - 浏览器：原生 BarcodeDetector 优先（Android Chrome 支持）；不可用时 CDN 懒加载 html5-qrcode 降级；
  *   - 只匹配库存中的 barcode 字段，不联网、不查外部药品库（N6）；
  *   - 扫码画面仅本地处理，不上传。
  *
  * 状态机（§3.7）：idle → loading（懒加载引擎，仅降级路径）→ scanning（摄像头取景）
  *                 → 命中 onDetected（自动停止）→ idle
- *                 └─ 权限拒绝 / 无摄像头 / 引擎加载失败 → onError（手动输入条码兜底）
+ *                 └─ 权限拒绝 / 无摄像头 / 引擎加载失败 / 原生插件不可用 → onError（手动输入条码兜底）
  *
- * 可单测的纯函数：supportsNative / normalizeCode / matchByBarcode / loadFallback（可注入 document）。
- * 扫码会话（startNative / startFallback）通过 opts.env 注入测试环境（BarcodeDetector、
- * navigator.mediaDevices、document、setTimeout 等），node 中可单测。
+ * 可单测的纯函数：isCapacitor / supportsNative / normalizeCode / matchByBarcode / loadFallback（可注入环境）。
+ * 扫码会话（startNativeCapacitor / startNative / startFallback）通过 opts.env 注入测试环境
+ * （Capacitor、BarcodeDetector、navigator.mediaDevices、document、setTimeout 等），node 中可单测。
  *
  * 浏览器中通过 <script> 加载，暴露全局 Scanner；node 中可 require。
  */
@@ -33,6 +35,32 @@
   function supportsNative(env) {
     env = env || global;
     return typeof env.BarcodeDetector === 'function';
+  }
+
+  /**
+   * Capacitor 原生环境检测（APK，D26）。纯函数、无 DOM 依赖，可单测。
+   *
+   * 检测顺序（任一路径命中即视为原生环境）：
+   *   1. env.Capacitor.isNativePlatform() 为 true（Capacitor 6 native-bridge 注入，APK 内恒为 true）；
+   *   2. env.Capacitor.Plugins（或顶层 env.Plugins）中存在原生扫码插件
+   *      —— 官方插件注册名 CapacitorBarcodeScanner，社区插件注册名 BarcodeScanner（兼容）。
+   *
+   * 浏览器网页版不加载 @capacitor/core → env.Capacitor 不存在 → 返回 false，行为不变。
+   *
+   * @param {object} [env] 测试注入：{ Capacitor: { isNativePlatform, Plugins } }
+   * @returns {boolean}
+   */
+  function isCapacitor(env) {
+    env = env || global;
+    try {
+      var cap = env.Capacitor;
+      if (cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform()) return true;
+      var plugins = (cap && cap.Plugins) || env.Plugins;
+      if (plugins) {
+        return !!(plugins.CapacitorBarcodeScanner || plugins.BarcodeScanner);
+      }
+    } catch (e) { /* 检测异常视为非原生环境，不中断 */ }
+    return false;
   }
 
   /** 码值归一化：去首尾空白；空 → null（统一存字符串，design.md §3.2）。 */
@@ -225,14 +253,85 @@
   }
 
   /**
-   * 启动扫码（§3.7 状态机）。
+   * Capacitor 原生扫码会话（APK，D26；@capacitor/barcode-scanner 官方插件，Capacitor 6）。
+   *
+   * 与浏览器路径不同：调用原生插件打开系统摄像头全屏扫码（独立 Activity），不依赖 DOM
+   * 取景元素；命中后插件自动关闭扫码界面并 resolve 结果。隐私同 D22：画面与码值仅本地处理。
+   *
+   * 实现要点：
+    *   - 插件注册名 CapacitorBarcodeScanner（兼容社区插件注册名 BarcodeScanner）；
+    *   - native.android.scanningLibrary = 'zxing'：纯本地 ZXing 解码，不依赖 Google Play 服务
+    *     （国内手机无 GMS 也可用；'mlkit' 需 GMS）——原生 Kotlin 侧从 options.native 包读取该字段；
+    *   - 相机权限由原生扫码 Activity 自行申请；拒绝/失败 → onError（手动输入条码兜底，§3.7）；
+   *   - 原生会话无法通过桥接取消：stop() 仅置标记，迟到结果被忽略（幂等安全）；
+   *   - 返回的会话对象与 start() 约定一致（关闭弹层时调用 Scanner.stop()）。
+   *
+   * @param {object} env   含 Capacitor（测试注入）
+   * @param {function} onDetected(code)  读到码值（单次命中后自动结束）
+   * @param {function} onState(state, msg)
+   * @param {function} onError(err)
+   */
+  function startNativeCapacitor(env, onDetected, onState, onError) {
+    var cap = env.Capacitor || {};
+    var plugins = cap.Plugins || env.Plugins || {};
+    var BarcodeScanner = plugins.CapacitorBarcodeScanner || plugins.BarcodeScanner;
+    if (!BarcodeScanner || typeof BarcodeScanner.scanBarcode !== 'function') {
+      onError(new Error('当前环境不支持原生扫码（未找到扫码插件），请手动输入条码'));
+      return;
+    }
+
+    var stopped = false;
+    var sess = {
+      stop: function () { stopped = true; } // 桥接无法取消进行中的原生会话，仅标记
+    };
+    active = sess;
+
+    onState('scanning', '正在扫描…请将条码对准取景框');
+    var scanPromise;
+    try {
+      scanPromise = BarcodeScanner.scanBarcode({
+        hint: 17,                           // CapacitorBarcodeScannerTypeHint.ALL：全部码型
+        scanInstructions: ' ',              // 插件默认展示英文取景提示，置空白串以保持界面全中文
+        scanButton: false,
+        scanText: ' ',                      // 同上：置空白串避免插件默认文案
+        cameraDirection: 1,                 // BACK：后置摄像头
+        native: {
+          scanOrientation: 3,               // ADAPTIVE：横竖屏自适应（原生侧从 native 包读取）
+          android: { scanningLibrary: 'zxing' } // ZXing 本地解码：无需 Google Play 服务（GMS）
+        }
+      });
+    } catch (e) {
+      // 桥接同步抛异常（而非返回 rejected promise）时兜底，与 .catch 分支同语义
+      stop();
+      onError(new Error('扫码失败（' + (e && e.message ? e.message : '未知原因') + '），请手动输入条码'));
+      return;
+    }
+    scanPromise.then(function (result) {
+      if (stopped) return;                // stop() 后忽略迟到结果
+      stop();
+      var code = normalizeCode(result && result.ScanResult);
+      if (!code) {
+        onError(new Error('未读取到条码内容，请重试或手动输入条码'));
+        return;
+      }
+      onDetected(code);
+    }).catch(function (err) {
+      if (stopped) return;
+      stop();
+      var msg = err && err.message ? err.message : '';
+      onError(new Error('扫码失败' + (msg ? '（' + msg + '）' : '') + '，请手动输入条码'));
+    });
+  }
+
+  /**
+   * 启动扫码（§3.7 状态机；APK 走原生插件，D26）。
    * @param {object} opts
-   *   element: DOM 容器（扫码取景区）
-   *   env:     可选注入（测试）：{ BarcodeDetector, navigator, document, Html5Qrcode, setTimeout, clearTimeout }
+   *   element: DOM 容器（扫码取景区；Capacitor 原生路径不使用）
+   *   env:     可选注入（测试）：{ Capacitor, BarcodeDetector, navigator, document, Html5Qrcode, setTimeout, clearTimeout }
    * @param {object} callbacks
    *   onDetected(code)  读到码值（单次命中后自动停止）
    *   onState(state, msg) 'loading' | 'scanning'
-   *   onError(err)       权限拒绝/无摄像头/引擎加载失败
+   *   onError(err)       权限拒绝/无摄像头/引擎加载失败/原生插件不可用
    * @returns {{stop:function}} 会话控制（关闭弹层时调用以释放摄像头）
    */
   function start(opts, callbacks) {
@@ -251,9 +350,14 @@
       return { stop: stop };
     }
 
-    if (supportsNative(env)) {
+    if (isCapacitor(env)) {
+      // APK/Capacitor 环境：原生扫码插件（系统摄像头，D26）
+      startNativeCapacitor(env, onDetected, onState, onError);
+    } else if (supportsNative(env)) {
+      // 浏览器：原生 BarcodeDetector 优先（§3.7）
       startNative(env, element, onDetected, onState, onError);
     } else {
+      // 浏览器：html5-qrcode CDN 懒加载降级
       startFallback(env, element, onDetected, onState, onError);
     }
     return { stop: stop };
@@ -262,6 +366,7 @@
   var Scanner = {
     PRIMARY_CDN: PRIMARY_CDN,
     FALLBACK_CDN: FALLBACK_CDN,
+    isCapacitor: isCapacitor,
     supportsNative: supportsNative,
     normalizeCode: normalizeCode,
     matchByBarcode: matchByBarcode,

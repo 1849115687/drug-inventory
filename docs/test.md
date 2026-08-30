@@ -2,7 +2,7 @@
 
 > 配套文档：`docs/requirements.md`（需求，已确认）、`docs/design.md`（设计）
 > 解析规则**唯一权威**：design.md §3.5（本测试不另立规则，仅引用并细化可测用例）
-> 自动化测试：`tests/parser.test.js`、`tests/storage.test.js`、`tests/scanner.test.js`、`tests/stats.test.js`，运行 `node --test "tests/*.test.js"`（115 用例：parser 23 + storage 56 + scanner 15 + stats 21）
+> 自动化测试：`tests/parser.test.js`、`tests/storage.test.js`、`tests/scanner.test.js`、`tests/stats.test.js`，运行 `node --test "tests/*.test.js"`（126 用例：parser 23 + storage 56 + scanner 26 + stats 21）
 
 ## 1. 测试用例（按用户故事映射）
 
@@ -215,6 +215,7 @@
 | T15-9 | US-15/AC50 | 新导出备份 | `formatVersion = 4` 且药品含 barcode 字段；导入 v1/v2/v3 旧备份 barcode 补 null（自动化：storage.test.js「导出」「导入 v1/v2/v3 备份」） |
 | T15-10 | US-15/AC48 | 扫码实现降级（无 BarcodeDetector） | 懒加载 html5-qrcode（CDN），加载失败/成功状态文案正确（自动化：scanner.test.js「loadFallback」「降级路径」） |
 | T15-11 | US-15 | 非 HTTPS / 非 localhost 环境点「扫码」 | 浏览器安全限制导致摄像头不可用 → 弹层提示「需 HTTPS 与摄像头权限」+ 手动输入兜底（自动化：scanner.test.js「原生路径：无 mediaDevices」） |
+| T15-12 | US-15/AC54 | **APK（Capacitor）环境**点「扫码」（APK 内 WebView 无 BarcodeDetector、getUserMedia 不可用） | 检测到 Capacitor 原生环境 → 调用原生插件 `@capacitor/barcode-scanner`（`native.android.scanningLibrary='zxing'`）打开系统摄像头全屏扫码；命中 → 回调码值；权限拒绝/插件缺失/空码/同步异常 → 弹层提示失败 + 「手动输入条码」兜底（自动化：scanner.test.js「isCapacitor」「Capacitor 分支」全部用例，D26） |
 
 ### US-16 桌面 App 适配与安装
 
@@ -231,10 +232,10 @@
 
 | 编号 | 关联 | 输入 | 预期输出/行为 |
 |---|---|---|---|
-| T17-1 | US-17/AC53 | push 到仓库 / workflow_dispatch 触发 Build APK | Actions 运行：npm ci → cap add android（幂等）→ 注入 CAMERA 权限 → cap sync → gradlew assembleDebug 成功 → 上传 `drug-inventory-apk` 构件 |
+| T17-1 | US-17/AC53 | push 到仓库 / workflow_dispatch 触发 Build APK | Actions 运行：npm ci → cap add android（幂等）→ 提 minSdkVersion=26（原生扫码插件要求）→ 注入 CAMERA 权限 → cap sync → gradlew assembleDebug 成功 → 上传 `drug-inventory-apk` 构件 |
 | T17-2 | US-17/AC53 | `android/app/src/main/AndroidManifest.xml` | cap add 后注入 `<uses-permission android:name="android.permission.CAMERA"/>`（不含则插入，幂等） |
-| T17-3 | US-17/AC53 | capacitor.config.json / package.json | appId=com.xiaodian.druginventory、appName=药品库存管理、webDir=deploy-dist；依赖仅 @capacitor/core|cli|android（^6） |
-| T17-4 | US-17/AC54 | 安装 APK 后打开 | 核心功能可用；扫码/OCR 首次使用自动申请相机权限 |
+| T17-3 | US-17/AC53 | capacitor.config.json / package.json | appId=com.xiaodian.druginventory、appName=药品库存管理、webDir=deploy-dist；依赖 @capacitor/core|cli|android（^6）+ @capacitor/barcode-scanner（^1.0.4，APK 原生扫码，D26） |
+| T17-4 | US-17/AC54 | 安装 APK 后打开 | 核心功能可用；**APK 内扫码走 Capacitor 原生插件**（系统摄像头，zxing 本地解码、无需 Google Play 服务）；扫码/OCR 首次使用自动申请相机权限 |
 | T17-5 | US-17/AC54 | 网页版导出备份 → APK 导入 | APK 内数据与网页版互相独立，导出/导入可迁移 |
 | T17-6 | US-17 | 修改功能后重新触发构建 | 产出新 APK，覆盖安装更新（README 含安装/更新/数据迁移说明） |
 | T17-7 | US-17/AC53 | `deploy-dist/` 与网页源码 | 保持同步（index.html/css/js/icons/manifest/sw.js 一致，供 webDir 与云端部署） |
@@ -248,7 +249,7 @@
 | N3 | 离线能力 | HTTPS 部署 + 添加到主屏幕后，断网（飞行模式）打开应用 → 页面与已缓存数据可用；SW 缓存命中（DevTools Application → Cache Storage） |
 | N4 | 数据持久化 | 添加药品/登记销售后刷新页面 → 数据仍在；关闭浏览器重开 → 数据仍在 |
 | N5 | OCR 可用性 | 首次使用 OCR：弱网观察加载进度条；断网/拦截 CDN → 明确错误反馈 + 重试/放弃可用；恢复网络重试成功 |
-| N6 | 安全性 | 代码审查：全项目无 fetch/XHR 业务请求；仅 ocr.js 的 Tesseract CDN（jsdelivr + unpkg 备用）与 scanner.js 的 html5-qrcode CDN（unpkg + jsdelivr 备用）外联；扫码画面/数据不出本地 |
+| N6 | 安全性 | 代码审查：全项目无 fetch/XHR 业务请求；仅 ocr.js 的 Tesseract CDN（jsdelivr + unpkg 备用）与 scanner.js 的 html5-qrcode CDN（unpkg + jsdelivr 备用，**APK 内扫码走原生插件、不加载 CDN**）外联；扫码画面/数据不出本地 |
 | N7 | 兼容性 | Chrome/Safari（含 iOS 15+）走查关键流程；微信内置浏览器打开 → 顶部提示条引导系统浏览器，手动登记流程可用 |
 | N8 | 界面语言 | 全界面走查：无英文残留文案（按钮/提示/弹层/toast 均为中文），风格统一 |
 
@@ -288,7 +289,7 @@ node --test "tests/*.test.js"
 
 - `tests/parser.test.js`：覆盖上表 P1~P18 及 §3.5 全部分支；
 - `tests/storage.test.js`：覆盖 T1-7/11、T2-7、T3-4/5/6、T4-9、T5-4、T6-1/3/4/6/9/10/11/12/13/14、T7-3/5/7、T8-11、T9-1~T9-11、T10-1~T10-9、T12-1~T12-4、T13-1/3/7（单位任意值）、T14-1/2/3（空规格归一化/判重）、T15-8/9（条码唯一性、导出/导入 barcode）等存储层用例（药品/耗材 CRUD、销售混选、医疗操作、有效期、条码唯一性、**formatVersion 4 导出**、v1/v2/v3/v4 导入兼容、加载归一化、售价快照，localStorage 用 mock 注入，design.md §3.1）；
-- `tests/scanner.test.js`：覆盖 T15-10/11 及扫码封装（supportsNative 可用性、normalizeCode 码值归一化、matchByBarcode 纯本地匹配、loadFallback 主/备 CDN 懒加载与失败切换、原生/降级两条扫码路径的命中与停止、权限/无摄像头/容器不可用错误分支，环境注入 design.md §3.7）；
+- `tests/scanner.test.js`：覆盖 T15-10/11/12 及扫码封装（**isCapacitor 原生环境检测与 Capacitor 分支（D26，@capacitor/barcode-scanner：命中/插件缺失/权限拒绝/空码/stop 幂等/同步异常兜底，`native.android.scanningLibrary='zxing'`）**、supportsNative 可用性、normalizeCode 码值归一化、matchByBarcode 纯本地匹配、loadFallback 主/备 CDN 懒加载与失败切换、原生/降级两条扫码路径的命中与停止、权限/无摄像头/容器不可用错误分支，环境注入 design.md §3.7）；
 - `tests/stats.test.js`：覆盖 T8-1~T8-10、T8-12、T11-1~T11-6、T14-7（按条目 name/spec 聚合）及 D12/D13/D16 统计口径（汇总、按日期/按条目聚合、排序、分位精度、耗材使用统计，纯函数无 DOM）。
 
 浏览器端用例（弹层/交互/OCR/CDN）按第 1、2 节手动走查：375px 模拟器、HTTPS 部署 + 断网、微信内置浏览器。

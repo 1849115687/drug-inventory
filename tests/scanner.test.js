@@ -1,7 +1,8 @@
 /**
  * scanner.js 单元测试 —— 纯函数 + 扫码会话（注入测试环境，design.md §3.7）
- * 覆盖：BarcodeDetector 可用性判断、码值归一化、条码匹配、CDN 懒加载降级分支、
- *       原生/降级两条扫码路径的命中与停止、错误分支（权限/无摄像头/容器不可用）
+ * 覆盖：Capacitor 原生环境检测与原生分支（D26）、BarcodeDetector 可用性判断、码值归一化、
+ *       条码匹配、CDN 懒加载降级分支、原生/降级两条扫码路径的命中与停止、错误分支
+ *       （权限/无摄像头/容器不可用）
  * 运行：node --test tests/
  */
 'use strict';
@@ -52,6 +53,40 @@ test('supportsNative：有 BarcodeDetector → true；无 → false', () => {
   assert.strictEqual(Scanner.supportsNative({}), false);
   assert.strictEqual(Scanner.supportsNative({ BarcodeDetector: undefined }), false);
   assert.strictEqual(Scanner.supportsNative({ BarcodeDetector: class {} }), true);
+});
+
+/* ---------- isCapacitor（APK/Capacitor 原生环境检测，D26） ---------- */
+
+test('isCapacitor：无 Capacitor 桥 → false（浏览器/普通环境）', () => {
+  assert.strictEqual(Scanner.isCapacitor({}), false);
+  assert.strictEqual(Scanner.isCapacitor({ Capacitor: undefined }), false);
+  assert.strictEqual(Scanner.isCapacitor({ Capacitor: null }), false);
+});
+
+test('isCapacitor：isNativePlatform() 为 true → true（APK 内恒为 true）', () => {
+  assert.strictEqual(Scanner.isCapacitor({ Capacitor: { isNativePlatform: () => true } }), true);
+});
+
+test('isCapacitor：isNativePlatform() 为 false → 继续查 Plugins', () => {
+  assert.strictEqual(Scanner.isCapacitor({ Capacitor: { isNativePlatform: () => false } }), false);
+  assert.strictEqual(
+    Scanner.isCapacitor({ Capacitor: { isNativePlatform: () => false, Plugins: { CapacitorBarcodeScanner: {} } } }),
+    true
+  );
+});
+
+test('isCapacitor：Plugins 中存在原生扫码插件 → true（兼容官方/社区注册名）', () => {
+  assert.strictEqual(Scanner.isCapacitor({ Capacitor: { Plugins: { CapacitorBarcodeScanner: {} } } }), true);
+  assert.strictEqual(Scanner.isCapacitor({ Capacitor: { Plugins: { BarcodeScanner: {} } } }), true);
+  assert.strictEqual(Scanner.isCapacitor({ Plugins: { BarcodeScanner: {} } }), true); // 顶层 env.Plugins
+  assert.strictEqual(Scanner.isCapacitor({ Capacitor: { Plugins: {} } }), false);
+});
+
+test('isCapacitor：isNativePlatform 抛异常 → false（检测不中断）', () => {
+  assert.strictEqual(
+    Scanner.isCapacitor({ Capacitor: { isNativePlatform: () => { throw new Error('bridge broken'); } } }),
+    false
+  );
 });
 
 /* ---------- normalizeCode（码值归一化） ---------- */
@@ -224,6 +259,119 @@ test('降级路径：摄像头启动失败 → onError', async () => {
     Scanner.start({ element: {}, env }, { onError: resolve });
   });
   assert.ok(/摄像头/.test(err.message));
+});
+
+/* ---------- Capacitor 原生扫码分支（D26，@capacitor/barcode-scanner） ---------- */
+
+test('Capacitor 分支：命中 → 回调归一化码值并自动结束会话', async () => {
+  let scanOptions = null;
+  const plugin = {
+    scanBarcode(options) {
+      scanOptions = options;
+      return Promise.resolve({ ScanResult: ' 6901234567890 ' });
+    }
+  };
+  const env = fakeEnv({
+    Capacitor: { isNativePlatform: () => true, Plugins: { CapacitorBarcodeScanner: plugin } }
+  });
+  const states = [];
+  const detected = new Promise((resolve) => {
+    Scanner.start({ element: {}, env }, { onDetected: resolve, onState: (s) => states.push(s) });
+  });
+  const code = await detected;
+  assert.strictEqual(code, '6901234567890');   // 码值归一化
+  assert.ok(scanOptions, '应调用原生插件 scanBarcode');
+  assert.strictEqual(scanOptions.hint, 17, 'hint=ALL：全部码型');
+  assert.strictEqual(scanOptions.cameraDirection, 1, '后置摄像头');
+  // 原生 Kotlin 侧从 native 包读取扫描库（native.android.scanningLibrary），强制 ZXing 本地解码（无需 GMS）
+  assert.strictEqual(scanOptions.native.scanOrientation, 3, '横竖屏自适应');
+  assert.strictEqual(scanOptions.native.android.scanningLibrary, 'zxing', 'ZXing 本地解码（无需 Google Play 服务）');
+  assert.ok(states.indexOf('scanning') >= 0, '应发出 scanning 状态');
+  assert.strictEqual(Scanner.isScanning(), false, '命中后会话已结束');
+});
+
+test('Capacitor 分支：插件缺失（isNativePlatform=true 但 Plugins 无插件）→ onError 手动输入兜底', () => {
+  const env = fakeEnv({ Capacitor: { isNativePlatform: () => true, Plugins: {} } });
+  let errMsg = '';
+  Scanner.start({ element: {}, env }, { onError: (e) => { errMsg = e.message; } });
+  assert.ok(/手动输入条码/.test(errMsg));
+  assert.ok(/原生扫码/.test(errMsg));
+});
+
+test('Capacitor 分支：权限拒绝/插件报错 → onError（手动输入兜底）', async () => {
+  const env = fakeEnv({
+    Capacitor: {
+      isNativePlatform: () => true,
+      Plugins: {
+        CapacitorBarcodeScanner: {
+          scanBarcode() { return Promise.reject(new Error('User did not grant permission')); }
+        }
+      }
+    }
+  });
+  const err = await new Promise((resolve) => {
+    Scanner.start({ element: {}, env }, { onError: resolve });
+  });
+  assert.ok(/扫码失败/.test(err.message));
+  assert.ok(/手动输入条码/.test(err.message));
+});
+
+test('Capacitor 分支：命中空码值 → onError', async () => {
+  const env = fakeEnv({
+    Capacitor: {
+      isNativePlatform: () => true,
+      Plugins: {
+        CapacitorBarcodeScanner: { scanBarcode() { return Promise.resolve({ ScanResult: '   ' }); } }
+      }
+    }
+  });
+  const err = await new Promise((resolve) => {
+    Scanner.start({ element: {}, env }, { onError: resolve });
+  });
+  assert.ok(/未读取到条码/.test(err.message));
+});
+
+test('Capacitor 分支：stop() 幂等；stop 后的迟到结果被忽略', async () => {
+  let scanCalls = 0;
+  let resolveScan;
+  const env = fakeEnv({
+    Capacitor: {
+      isNativePlatform: () => true,
+      Plugins: {
+        CapacitorBarcodeScanner: {
+          scanBarcode() {
+            scanCalls++;
+            return new Promise((resolve) => { resolveScan = resolve; });
+          }
+        }
+      }
+    }
+  });
+  let detectedCalls = 0;
+  Scanner.start({ element: {}, env }, { onDetected: () => { detectedCalls++; } });
+  assert.strictEqual(Scanner.isScanning(), true, '原生会话进行中');
+  assert.doesNotThrow(() => Scanner.stop());
+  assert.strictEqual(Scanner.isScanning(), false);
+  resolveScan({ ScanResult: '6901234567890' }); // 迟到结果：stop 后忽略，不再回调
+  await new Promise((r) => setTimeout(r, 0));
+  assert.strictEqual(detectedCalls, 0);
+  assert.strictEqual(scanCalls, 1);
+});
+
+test('Capacitor 分支：scanBarcode 同步抛异常 → onError（手动输入兜底）', () => {
+  const env = fakeEnv({
+    Capacitor: {
+      isNativePlatform: () => true,
+      Plugins: {
+        CapacitorBarcodeScanner: { scanBarcode() { throw new Error('bridge broken'); } }
+      }
+    }
+  });
+  let errMsg = '';
+  Scanner.start({ element: {}, env }, { onError: (e) => { errMsg = e.message; } });
+  assert.ok(/扫码失败/.test(errMsg));
+  assert.ok(/手动输入条码/.test(errMsg));
+  assert.strictEqual(Scanner.isScanning(), false, '同步异常后会话已结束');
 });
 
 /* ---------- start 通用分支 ---------- */

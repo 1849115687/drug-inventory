@@ -30,6 +30,11 @@ jobs:
             npx cap add android
           fi
 
+      - name: Bump minSdkVersion for barcode scanner plugin (requires 26)
+        run: |
+          sed -i 's/minSdkVersion = [0-9][0-9]*/minSdkVersion = 26/' android/variables.gradle
+          grep -q "minSdkVersion = 26" android/variables.gradle
+
       - name: Inject CAMERA permission into AndroidManifest.xml
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
