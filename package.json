@@ -2,12 +2,12 @@
   "name": "drug-inventory-app",
   "version": "4.0.0",
   "private": true,
-  "description": "药品库存管理 PWA（APK 构建依赖 @capacitor/*，仅 GitHub Actions 云端 CI 使用，design.md §3.9）",
+  "description": "药品库存管理 PWA（APK 构建依赖 @capacitor/* + phonegap-plugin-barcodescanner，仅 GitHub Actions 云端 CI 使用，design.md §3.9）",
   "license": "UNLICENSED",
   "dependencies": {
     "@capacitor/android": "^6.0.0",
-    "@capacitor/barcode-scanner": "^1.0.4",
     "@capacitor/cli": "^6.0.0",
-    "@capacitor/core": "^6.0.0"
+    "@capacitor/core": "^6.0.0",
+    "phonegap-plugin-barcodescanner": "^8.1.0"
   }
 }
