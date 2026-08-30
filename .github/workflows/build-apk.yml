@@ -43,6 +43,11 @@ jobs:
           fi
           grep -q "android.permission.CAMERA" "$MANIFEST"
 
+      - name: Add JitPack repository for barcode scanner dependency
+        run: |
+          sed -i 's|mavenCentral()|mavenCentral()\n        maven { url "https://jitpack.io" }|' android/build.gradle
+          grep -q "jitpack" android/build.gradle
+
       - name: Sync web assets into Android project
         run: npx cap sync android
 
