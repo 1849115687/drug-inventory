@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1a9c6e">
+  <title>药品库存管理</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+
+    <!-- 微信内置浏览器提示 -->
+    <div id="wechat-banner" class="wechat-banner" hidden>
+      <span>当前为微信内置浏览器：PWA 安装/离线功能受限，建议点击右上角「···」选择「在浏览器打开」使用完整功能。</span>
+      <button type="button" class="banner-close" id="wechat-banner-close" aria-label="关闭">✕</button>
+    </div>
+
+    <!-- ========== Tab 1：库存 ========== -->
+    <section id="tab-inventory" class="tab-panel">
+      <header class="topbar">
+        <h1>库存</h1>
+        <div class="actions">
+          <div class="menu-wrap">
+            <button type="button" class="icon-btn" id="btn-menu" aria-label="更多">⋮</button>
+            <div class="menu-popup" id="menu-popup" hidden>
+              <button type="button" data-action="export">⬇ 导出备份</button>
+              <button type="button" data-action="import">⬆ 导入备份</button>
+              <button type="button" data-action="about">ℹ 关于</button>
+            </div>
+          </div>
+          <button type="button" class="icon-btn" id="btn-add" aria-label="添加药品">＋</button>
+        </div>
+      </header>
+      <div class="list" id="inventory-list"></div>
+    </section>
+
+    <!-- ========== Tab 2：登记销售 ========== -->
+    <section id="tab-sell" class="tab-panel" hidden>
+      <header class="topbar">
+        <h1>登记销售</h1>
+      </header>
+
+      <p class="section-title">拍照 / 相册识别销售单（OCR）</p>
+      <div class="ocr-entry">
+        <button type="button" class="btn" id="btn-camera">📷 拍照识别</button>
+        <button type="button" class="btn" id="btn-album">🖼 相册识别</button>
+      </div>
+
+      <div class="scan-sell-entry">
+        <button type="button" class="btn" id="btn-scan-sell">📷 扫码选药（按条码直接选中药品）</button>
+      </div>
+
+      <p class="section-title">手动登记</p>
+      <form class="form" id="sell-form" style="padding: 2px 14px 14px;">
+        <div class="field">
+          <label for="sell-drug-input">条目（药品 / 耗材）<span class="req">*</span></label>
+          <div class="combobox">
+            <input class="input" id="sell-drug-input" type="text" placeholder="输入名称/规格搜索" autocomplete="off" aria-autocomplete="list">
+            <ul class="dropdown" id="sell-drug-list" hidden></ul>
+          </div>
+          <p class="hint" id="sell-drug-hint"></p>
+          <p class="field-error" id="sell-drug-error" hidden></p>
+        </div>
+        <div class="field">
+          <label for="sell-qty">数量（正整数）<span class="req">*</span></label>
+          <input class="input" id="sell-qty" type="number" inputmode="numeric" min="1" step="1" placeholder="例如 2">
+          <p class="field-error" id="sell-qty-error" hidden></p>
+        </div>
+        <div class="field">
+          <label for="sell-price">卖出价（元）</label>
+          <input class="input" id="sell-price" type="number" inputmode="decimal" min="0" step="0.01" placeholder="选中条目后自动带出，可修改">
+          <p class="hint" id="sell-price-hint"></p>
+          <p class="field-error" id="sell-price-error" hidden></p>
+        </div>
+        <div class="field">
+          <label for="sell-note">备注（可选）</label>
+          <input class="input" id="sell-note" type="text" placeholder="选填">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-sell-confirm">确认扣减</button>
+      </form>
+    </section>
+
+    <!-- ========== Tab 3：医疗（耗材 / 医疗操作） ========== -->
+    <section id="tab-medical" class="tab-panel" hidden>
+      <header class="topbar">
+        <h1>医疗</h1>
+        <div class="actions">
+          <button type="button" class="icon-btn" id="btn-add-consumable" aria-label="添加耗材">＋</button>
+        </div>
+      </header>
+
+      <div class="seg-tabs">
+        <button type="button" class="seg-tab active" data-medical-view="consumable">耗材</button>
+        <button type="button" class="seg-tab" data-medical-view="op">医疗操作</button>
+      </div>
+
+      <!-- 耗材子视图 -->
+      <div id="medical-view-consumable">
+        <div class="list" id="consumable-list"></div>
+      </div>
+
+      <!-- 医疗操作子视图 -->
+      <div id="medical-view-op" hidden>
+        <form class="form" id="op-form" style="padding: 2px 14px 14px;">
+          <div class="field">
+            <label for="op-type">操作类型<span class="req">*</span></label>
+            <input class="input" id="op-type" type="text" list="op-type-suggest" placeholder="例如：换药" autocomplete="off">
+            <datalist id="op-type-suggest">
+              <option value="换药"></option>
+              <option value="清创"></option>
+              <option value="消毒"></option>
+              <option value="包扎"></option>
+              <option value="拆线"></option>
+              <option value="换敷料"></option>
+            </datalist>
+            <p class="hint">可选择常用类型，也可自行输入自定义类型</p>
+            <p class="field-error" id="op-type-error" hidden></p>
+          </div>
+          <div class="field">
+            <label>本次使用耗材</label>
+            <div id="op-items"></div>
+            <button type="button" class="btn btn-ghost btn-block" id="btn-add-op-item" style="margin-top:8px;">＋添加耗材</button>
+          </div>
+          <div class="field">
+            <label for="op-note">备注（可选）</label>
+            <input class="input" id="op-note" type="text" placeholder="选填">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-op-confirm">确认记录（扣减耗材）</button>
+        </form>
+
+        <p class="section-title">操作历史</p>
+        <div class="filter-bar">
+          <select class="select" id="op-filter-type">
+            <option value="">全部类型</option>
+          </select>
+        </div>
+        <div id="op-history"></div>
+      </div>
+    </section>
+
+    <!-- ========== Tab 4：销售记录 ========== -->
+    <section id="tab-records" class="tab-panel" hidden>
+      <header class="topbar">
+        <h1>销售记录</h1>
+      </header>
+      <div class="filter-bar">
+        <input class="input" id="rec-keyword" type="text" placeholder="按药品名/规格筛选">
+        <select class="select" id="rec-source">
+          <option value="">全部来源</option>
+          <option value="manual">手动</option>
+          <option value="ocr">OCR</option>
+        </select>
+      </div>
+      <div id="records-list"></div>
+    </section>
+
+    <!-- ========== Tab 5：统计（销售统计 / 耗材使用） ========== -->
+    <section id="tab-stats" class="tab-panel" hidden>
+      <header class="topbar">
+        <h1>统计</h1>
+      </header>
+
+      <div class="seg-tabs">
+        <button type="button" class="seg-tab active" data-stats-segment="sales">销售统计</button>
+        <button type="button" class="seg-tab" data-stats-segment="usage">耗材使用</button>
+      </div>
+
+      <div class="stats-filter">
+        <select class="select" id="stat-period">
+          <option value="day">按日</option>
+          <option value="month">按月</option>
+          <option value="range">自定义区间</option>
+        </select>
+        <input class="input" type="date" id="stat-date-day">
+        <input class="input" type="month" id="stat-date-month" hidden>
+        <span class="stats-range-sep" id="stat-range-sep" hidden>至</span>
+        <input class="input" type="date" id="stat-date-start" hidden>
+        <input class="input" type="date" id="stat-date-end" hidden>
+      </div>
+
+      <!-- 销售统计 -->
+      <div id="stats-segment-sales">
+        <div class="stats-summary">
+          <div class="stat-card">
+            <span class="stat-label">总销售额</span>
+            <span class="stat-value" id="stat-sales">¥0.00</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">总成本</span>
+            <span class="stat-value" id="stat-cost">¥0.00</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">总毛利</span>
+            <span class="stat-value profit" id="stat-profit">¥0.00</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">毛利率</span>
+            <span class="stat-value" id="stat-margin">—</span>
+          </div>
+        </div>
+
+        <div class="stats-tabs">
+          <button type="button" class="stats-tab active" data-sales-view="date">按日期</button>
+          <button type="button" class="stats-tab" data-sales-view="item">按条目</button>
+        </div>
+
+        <div id="sales-view-date">
+          <div id="sales-date-list"></div>
+        </div>
+
+        <div id="sales-view-item" hidden>
+          <div id="sales-item-wrap"></div>
+        </div>
+
+        <p class="stats-note">销售统计口径：销售额按销售记录中的售价快照计算（未设置售价的记录不计入），包含药品与耗材售卖；成本按统计时药品/耗材当前进价计算（未设置售价、未设置进价或已删除条目的历史记录不计入成本，其毛利显示「—」）；调整进价会影响历史毛利。</p>
+      </div>
+
+      <!-- 耗材使用 -->
+      <div id="stats-segment-usage" hidden>
+        <div class="stats-summary">
+          <div class="stat-card">
+            <span class="stat-label">耗材总使用量</span>
+            <span class="stat-value" id="usage-total">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">使用记录数</span>
+            <span class="stat-value" id="usage-count">0</span>
+          </div>
+        </div>
+
+        <div class="stats-tabs">
+          <button type="button" class="stats-tab active" data-usage-view="date">按日期</button>
+          <button type="button" class="stats-tab" data-usage-view="item">按耗材</button>
+        </div>
+
+        <div id="usage-view-date">
+          <div id="usage-date-list"></div>
+        </div>
+
+        <div id="usage-view-item" hidden>
+          <div id="usage-item-wrap"></div>
+        </div>
+
+        <p class="stats-note">耗材使用口径：使用量 = Σ 操作明细中的耗材数量（一次医疗操作可能使用多种耗材，各按数量计入）；已删除耗材的历史操作按记录快照统计。</p>
+      </div>
+    </section>
+
+    <!-- ========== 底部 Tab 栏 ========== -->
+    <nav class="tabbar" id="tabbar">
+      <button type="button" data-tab="inventory" class="active">
+        <span class="tab-icon">📦</span><span>库存</span>
+      </button>
+      <button type="button" data-tab="sell">
+        <span class="tab-icon">✏️</span><span>登记销售</span>
+      </button>
+      <button type="button" data-tab="medical">
+        <span class="tab-icon">🏥</span><span>医疗</span>
+      </button>
+      <button type="button" data-tab="records">
+        <span class="tab-icon">📋</span><span>销售记录</span>
+      </button>
+      <button type="button" data-tab="stats">
+        <span class="tab-icon">📊</span><span>统计</span>
+      </button>
+    </nav>
+
+    <!-- ========== 添加/编辑药品弹层 ========== -->
+    <div class="modal" id="modal-drug" hidden>
+      <div class="modal-card">
+        <div class="modal-title">
+          <span id="drug-modal-title">添加药品</span>
+          <button type="button" class="modal-close" data-close="modal-drug" aria-label="关闭">✕</button>
+        </div>
+        <form class="form" id="drug-form" novalidate>
+          <div class="field">
+            <label for="drug-name">名称<span class="req">*</span></label>
+            <input class="input" id="drug-name" type="text" placeholder="例如：阿莫西林胶囊">
+            <p class="field-error" id="drug-name-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="drug-spec">规格（可选）</label>
+            <input class="input" id="drug-spec" type="text" placeholder="例如：0.25g*24粒（可留空）">
+            <p class="hint">可留空；同名且规格都空的药品仍会判重</p>
+            <p class="field-error" id="drug-spec-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="drug-stock">库存量（整数，≥0）<span class="req">*</span></label>
+            <input class="input" id="drug-stock" type="number" inputmode="numeric" min="0" step="1" placeholder="0">
+            <p class="field-error" id="drug-stock-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="drug-unit">单位<span class="req">*</span></label>
+            <input class="input" id="drug-unit" type="text" list="unit-suggest-drug" placeholder="例如：盒" autocomplete="off">
+            <datalist id="unit-suggest-drug">
+              <option value="盒"></option>
+              <option value="瓶"></option>
+              <option value="支"></option>
+            </datalist>
+            <p class="hint">可点击选择常用单位，也可手动输入任意单位</p>
+            <p class="field-error" id="drug-unit-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="drug-threshold">预警阈值（整数，≥0）</label>
+            <input class="input" id="drug-threshold" type="number" inputmode="numeric" min="0" step="1" placeholder="5">
+            <p class="hint">库存 ≤ 阈值时红色高亮提醒（默认 5）</p>
+            <p class="field-error" id="drug-threshold-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="drug-barcode">条码（可选）</label>
+            <div class="barcode-row">
+              <input class="input" id="drug-barcode" type="text" placeholder="扫码或手动输入，一药一码" autocomplete="off">
+              <button type="button" class="btn btn-ghost btn-scan" id="btn-scan-drug">📷 扫码</button>
+            </div>
+            <p class="hint">扫码自动填入；该码已收录时提示对应药品</p>
+            <p class="field-error" id="drug-barcode-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="drug-price-cost">进价（元，可选）</label>
+            <input class="input" id="drug-price-cost" type="number" inputmode="decimal" min="0" step="0.01" placeholder="选填，最多两位小数">
+            <p class="field-error" id="drug-price-cost-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="drug-price-sell">卖出价（元，可选）</label>
+            <input class="input" id="drug-price-sell" type="number" inputmode="decimal" min="0" step="0.01" placeholder="选填，最多两位小数">
+            <p class="field-error" id="drug-price-sell-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="drug-expiry">有效期至（日期，可选）</label>
+            <input class="input" id="drug-expiry" type="date">
+            <p class="hint">临期（≤90 天）橙色标记；已过期红色标记且禁止销售</p>
+            <p class="field-error" id="drug-expiry-error" hidden></p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-ghost" data-close="modal-drug">取消</button>
+            <button type="submit" class="btn btn-primary" id="btn-drug-save">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ========== 添加/编辑耗材弹层 ========== -->
+    <div class="modal" id="modal-consumable" hidden>
+      <div class="modal-card">
+        <div class="modal-title">
+          <span id="consumable-modal-title">添加耗材</span>
+          <button type="button" class="modal-close" data-close="modal-consumable" aria-label="关闭">✕</button>
+        </div>
+        <form class="form" id="consumable-form" novalidate>
+          <div class="field">
+            <label for="cons-name">名称<span class="req">*</span></label>
+            <input class="input" id="cons-name" type="text" placeholder="例如：医用纱布">
+            <p class="field-error" id="cons-name-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="cons-unit">单位<span class="req">*</span></label>
+            <input class="input" id="cons-unit" type="text" list="unit-suggest-cons" placeholder="例如：卷" autocomplete="off">
+            <datalist id="unit-suggest-cons">
+              <option value="片"></option>
+              <option value="根"></option>
+              <option value="卷"></option>
+              <option value="瓶"></option>
+              <option value="袋"></option>
+              <option value="包"></option>
+              <option value="支"></option>
+              <option value="盒"></option>
+              <option value="个"></option>
+            </datalist>
+            <p class="hint">可点击选择常用单位，也可手动输入任意单位</p>
+            <p class="field-error" id="cons-unit-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="cons-initial">初始存量（整数，≥0）<span class="req">*</span></label>
+            <input class="input" id="cons-initial" type="number" inputmode="numeric" min="0" step="1" placeholder="0">
+            <p class="hint" id="cons-initial-hint">创建后当前存量 = 初始存量；之后用「进货」调整</p>
+            <p class="field-error" id="cons-initial-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="cons-threshold">预警阈值（整数，≥0）</label>
+            <input class="input" id="cons-threshold" type="number" inputmode="numeric" min="0" step="1" placeholder="5">
+            <p class="hint">存量 ≤ 阈值时红色高亮提醒（默认 5）</p>
+            <p class="field-error" id="cons-threshold-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="cons-price-cost">进价（元，可选）</label>
+            <input class="input" id="cons-price-cost" type="number" inputmode="decimal" min="0" step="0.01" placeholder="选填，最多两位小数">
+            <p class="field-error" id="cons-price-cost-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="cons-price-sell">卖出价（元，可选）</label>
+            <input class="input" id="cons-price-sell" type="number" inputmode="decimal" min="0" step="0.01" placeholder="选填，最多两位小数">
+            <p class="field-error" id="cons-price-sell-error" hidden></p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-ghost" data-close="modal-consumable">取消</button>
+            <button type="submit" class="btn btn-primary" id="btn-consumable-save">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ========== 耗材进货/调整存量弹层 ========== -->
+    <div class="modal" id="modal-adjust" hidden>
+      <div class="modal-card">
+        <div class="modal-title">
+          <span>进货 / 调整存量</span>
+          <button type="button" class="modal-close" data-close="modal-adjust" aria-label="关闭">✕</button>
+        </div>
+        <p class="hint" id="adjust-name" style="padding: 0 2px 8px;"></p>
+        <form class="form" id="adjust-form" novalidate>
+          <div class="field">
+            <label>调整方式</label>
+            <div class="radio-row">
+              <label class="radio-item"><input type="radio" name="adjust-mode" value="set" checked> 设置新存量</label>
+              <label class="radio-item"><input type="radio" name="adjust-mode" value="add"> 增加量</label>
+            </div>
+          </div>
+          <div class="field">
+            <label for="adjust-value" id="adjust-value-label">新存量（整数，≥0）</label>
+            <input class="input" id="adjust-value" type="number" inputmode="numeric" step="1" placeholder="例如 20">
+            <p class="field-error" id="adjust-error" hidden></p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-ghost" data-close="modal-adjust">取消</button>
+            <button type="submit" class="btn btn-primary" id="btn-adjust-confirm">确认</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ========== 删除确认弹层（药品 / 耗材通用） ========== -->
+    <div class="modal" id="modal-delete" hidden>
+      <div class="modal-card center">
+        <div class="modal-title"><span id="delete-modal-title">删除药品</span></div>
+        <p id="delete-text">确定删除该药品吗？删除后其历史销售记录仍会保留。</p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" data-close="modal-delete">取消</button>
+          <button type="button" class="btn btn-danger" id="btn-delete-confirm">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== OCR 确认列表弹层 ========== -->
+    <div class="modal" id="modal-ocr" hidden>
+      <div class="modal-card">
+        <div class="modal-title">
+          <span>识别结果确认</span>
+          <button type="button" class="modal-close" data-close="modal-ocr" aria-label="关闭">✕</button>
+        </div>
+        <p class="ocr-summary" id="ocr-summary"></p>
+        <div id="ocr-rows"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="btn-ocr-abandon">放弃</button>
+          <button type="button" class="btn btn-primary" id="btn-ocr-confirm">确认扣减</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== OCR 加载进度弹层 ========== -->
+    <div class="modal" id="modal-ocr-loading" hidden>
+      <div class="modal-card center">
+        <div class="progress-wrap">
+          <div class="spinner"></div>
+          <p class="progress-text" id="ocr-loading-text">正在加载识别引擎…</p>
+          <div class="progress-bar"><div class="fill" id="ocr-loading-bar" style="width:0%"></div></div>
+          <p class="hint" id="ocr-loading-sub" style="margin-top:10px;">首次使用需联网下载 OCR 引擎与中文语言包，请稍候</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== OCR 错误弹层 ========== -->
+    <div class="modal" id="modal-ocr-error" hidden>
+      <div class="modal-card center">
+        <div class="modal-title"><span>识别失败</span></div>
+        <p id="ocr-error-text" style="font-size:14px;color:#6b7a74;"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="btn-ocr-error-abandon">放弃</button>
+          <button type="button" class="btn btn-primary" id="btn-ocr-error-retry">重试</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 扫码弹层（US-15 / AC48~AC49） ========== -->
+    <div class="modal" id="modal-scan" hidden>
+      <div class="modal-card scan-card">
+        <div class="modal-title">
+          <span>扫描条码 / 二维码</span>
+          <button type="button" class="modal-close" data-close="modal-scan" aria-label="关闭">✕</button>
+        </div>
+        <div class="scan-viewport" id="scan-viewport"></div>
+        <p class="scan-status" id="scan-status">正在启动摄像头…</p>
+        <p class="hint" style="text-align:left;">请将条码/二维码对准取景框；扫码画面仅本地处理，不上传。首次使用需授权摄像头权限。</p>
+        <div class="scan-fallback" id="scan-fallback" hidden>
+          <button type="button" class="btn btn-ghost btn-block" id="btn-scan-manual">⌨ 手动输入条码</button>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="btn-scan-close">停止并关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 导入确认弹层 ========== -->
+    <div class="modal" id="modal-import" hidden>
+      <div class="modal-card center">
+        <div class="modal-title"><span>导入备份</span></div>
+        <div class="import-summary" id="import-summary"></div>
+        <p class="import-warn">导入将<strong>整体覆盖</strong>当前全部数据（药品、耗材、销售记录、医疗操作、设置），且不可撤销。建议先导出当前数据再导入。</p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" data-close="modal-import">取消</button>
+          <button type="button" class="btn btn-danger" id="btn-import-confirm">确认覆盖导入</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 关于弹层 ========== -->
+    <div class="modal" id="modal-about" hidden>
+      <div class="modal-card">
+        <div class="modal-title">
+          <span>关于</span>
+          <button type="button" class="modal-close" data-close="modal-about" aria-label="关闭">✕</button>
+        </div>
+        <div class="about-text">
+          <h3>数据备份提醒</h3>
+          <p>本应用数据保存在浏览器 localStorage 中，<strong>可能被浏览器清理或清除上网数据时删除</strong>。建议定期点击「库存」页右上角 ⋮ →「导出备份」，在更换手机或清理数据前用「导入备份」恢复。</p>
+          <h3>离线与安装</h3>
+          <p>通过 HTTPS 托管后，可用浏览器「添加到主屏幕」安装，断网也能打开使用。若直接以 file:// 打开本页面，核心功能可用，但无法安装到主屏幕、无法离线。</p>
+          <h3>桌面安装引导（Windows）</h3>
+          <p><strong>Chrome</strong>：打开线上网址 → 地址栏右侧「安装」图标（显示器+下载箭头）→ 点「安装」；或在右上角 ⋮ →「安装药品库存管理…」。</p>
+          <p><strong>Edge</strong>：打开线上网址 → 地址栏右侧「应用可用」图标（＋）→「安装」；或在右上角 ⋯ →「应用」→「将此站点安装为应用」。</p>
+          <p>安装后可从开始菜单/桌面快捷方式打开，窗口 ≥768px 时自动切换为宽屏多列布局。</p>
+          <h3>条码扫码说明</h3>
+          <p>扫码需在 <strong>HTTPS 或 localhost</strong> 环境使用（浏览器安全限制），首次使用会请求摄像头权限；优先使用浏览器原生扫码（BarcodeDetector），不支持时自动联网加载备用扫码库（html5-qrcode）。扫码画面仅本地处理，不联网、不查外部药品库。</p>
+          <h3>微信浏览器限制</h3>
+          <p>微信内置浏览器不支持 PWA 安装与离线，且 OCR 联网加载可能受限。建议点击右上角「···」→「在浏览器打开」，使用系统浏览器。</p>
+          <h3>OCR 说明</h3>
+          <p>识别引擎（Tesseract.js + 中文语言包）在首次使用「拍照/相册识别」时联网下载；识别结果需人工确认后才扣减库存。手写单据识别率不保证，可用手动登记代替。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 隐藏文件输入 ========== -->
+    <input type="file" id="file-camera" accept="image/*" capture="environment" hidden>
+    <input type="file" id="file-album" accept="image/*" hidden>
+    <input type="file" id="file-import" accept=".json,application/json" hidden>
+
+    <div id="toast-container"></div>
+  </div>
+
+  <!-- 普通 <script> 按序加载（file:// 兼容，禁用 ES Modules，design.md D2） -->
+  <script src="js/storage.js"></script>
+  <script src="js/parser.js"></script>
+  <script src="js/ocr.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/scanner.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
