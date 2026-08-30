@@ -53,6 +53,11 @@ jobs:
           sed -i "s|compile(name:'barcodescanner-release-2.1.5', ext:'aar')|implementation fileTree(dir: 'src/main/libs', include: ['*.aar'])|" node_modules/phonegap-plugin-barcodescanner/src/android/barcodescanner.gradle
           grep -q "implementation fileTree" node_modules/phonegap-plugin-barcodescanner/src/android/barcodescanner.gradle
 
+      - name: Remove legacy support-v4 dependency from plugin (AndroidX conflict)
+        run: |
+          sed -i '/com.android.support:support-v4/d' node_modules/phonegap-plugin-barcodescanner/plugin.xml
+          ! grep -q "com.android.support:support-v4" node_modules/phonegap-plugin-barcodescanner/plugin.xml
+
       - name: Sync web assets into Android project
         run: npx cap sync android
 
