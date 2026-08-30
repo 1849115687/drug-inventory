@@ -48,6 +48,11 @@ jobs:
           sed -i 's|mavenCentral()|mavenCentral()\n        maven { url "https://jitpack.io" }|' android/build.gradle
           grep -q "jitpack" android/build.gradle
 
+      - name: Patch barcode scanner plugin gradle for Gradle 8 (compile to implementation)
+        run: |
+          sed -i "s|compile(name:'barcodescanner-release-2.1.5', ext:'aar')|implementation fileTree(dir: 'src/main/libs', include: ['*.aar'])|" node_modules/phonegap-plugin-barcodescanner/src/android/barcodescanner.gradle
+          grep -q "implementation fileTree" node_modules/phonegap-plugin-barcodescanner/src/android/barcodescanner.gradle
+
       - name: Sync web assets into Android project
         run: npx cap sync android
 
