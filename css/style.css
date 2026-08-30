@@ -1,0 +1,1366 @@
+/* ============================================================
+   style.css — 药品销售库存管理小程序（PWA）
+   移动优先；375px 无横向滚动；主要操作目标 ≥44×44px
+   主题：医药绿 #1a9c6e（design.md §8）；低库存红 #e74c3c
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --primary: #1a9c6e;
+  --primary-dark: #14805a;
+  --primary-light: #e6f5ef;
+  --danger: #e74c3c;
+  --danger-light: #fdf0ee;
+  --bg: #f4f7f6;
+  --card: #ffffff;
+  --text: #22302b;
+  --text-2: #6b7a74;
+  --border: #e3eae7;
+  --radius: 12px;
+  --tabbar-h: 58px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html,
+body {
+  width: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 100vh;
+}
+
+/* 应用容器：手机全宽，桌面居中限宽 */
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 16px);
+  position: relative;
+}
+
+/* ---------------- 微信提示横幅 ---------------- */
+.wechat-banner {
+  background: #fff7e6;
+  color: #8a6d1a;
+  font-size: 13px;
+  padding: 10px 40px 10px 12px;
+  position: relative;
+  border-bottom: 1px solid #f0e3bd;
+}
+.wechat-banner .banner-close {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: #8a6d1a;
+  font-size: 16px;
+}
+
+/* ---------------- 顶栏 ---------------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 14px 10px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 5;
+}
+.topbar h1 {
+  font-size: 20px;
+  font-weight: 700;
+}
+.topbar .actions {
+  display: flex;
+  gap: 4px;
+}
+.icon-btn {
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text);
+  border-radius: 10px;
+}
+.icon-btn:active {
+  background: #e2eae6;
+}
+
+/* ⋮ 菜单弹层 */
+.menu-wrap {
+  position: relative;
+}
+.menu-popup {
+  position: absolute;
+  top: 48px;
+  right: 6px;
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  min-width: 148px;
+  overflow: hidden;
+  z-index: 40;
+}
+.menu-popup button {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+  border: none;
+  background: var(--card);
+  text-align: left;
+  padding: 0 14px;
+  font-size: 15px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+.menu-popup button:last-child {
+  border-bottom: none;
+}
+.menu-popup button:active {
+  background: var(--primary-light);
+}
+
+/* ---------------- 库存列表 ---------------- */
+.list {
+  padding: 4px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 12px 12px 12px 14px;
+  display: flex;
+  align-items: stretch;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.card-main {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  padding-right: 8px;
+}
+.card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.card-top .name {
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stock {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+}
+.stock small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-2);
+}
+.card-sub {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.card-sub .spec {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-sub .threshold {
+  white-space: nowrap;
+}
+/* 库存卡片：卖出价（无价格显示「—」，AC25） */
+.card-sub .card-price {
+  white-space: nowrap;
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+
+/* 低库存高亮（库存 ≤ 阈值，含负数） */
+.card.low {
+  border-color: var(--danger);
+  background: var(--danger-light);
+}
+.card.low .stock {
+  color: var(--danger);
+}
+/* 负数库存：额外「欠 N」标记 */
+.owe-badge {
+  display: inline-block;
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin-left: 6px;
+  vertical-align: 2px;
+  white-space: nowrap;
+}
+
+.card-del {
+  align-self: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  color: #b6c1bc;
+  border-radius: 10px;
+}
+.card-del:active {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+/* 空状态引导 */
+.empty {
+  text-align: center;
+  padding: 72px 24px;
+  color: var(--text-2);
+}
+.empty .empty-icon {
+  font-size: 52px;
+  display: block;
+  margin-bottom: 12px;
+}
+.empty p {
+  font-size: 14px;
+}
+
+/* ---------------- 按钮 ---------------- */
+.btn {
+  min-height: 46px;
+  min-width: 44px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 0 18px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn:active {
+  opacity: 0.85;
+}
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+.btn-primary:disabled {
+  background: #b9cfc6;
+}
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+.btn-ghost {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-block {
+  width: 100%;
+}
+.btn-lg {
+  min-height: 50px;
+}
+
+/* ---------------- 表单 ---------------- */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 6px 0 2px;
+}
+.field label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+.field label .req {
+  color: var(--danger);
+  margin-left: 2px;
+}
+.input,
+.select {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 16px;
+  color: var(--text);
+  padding: 0 12px;
+  font-family: inherit;
+}
+.input:focus,
+.select:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+  border-color: var(--primary);
+}
+.field-error {
+  color: var(--danger);
+  font-size: 13px;
+  margin-top: 5px;
+}
+.hint {
+  color: var(--text-2);
+  font-size: 13px;
+  margin-top: 5px;
+}
+
+/* 可搜索药品下拉（登记销售） */
+.combobox {
+  position: relative;
+}
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: 30;
+  list-style: none;
+}
+.dropdown li {
+  padding: 0 12px;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.dropdown li:last-child {
+  border-bottom: none;
+}
+.dropdown li:active {
+  background: var(--primary-light);
+}
+.dropdown li .d-name {
+  font-weight: 600;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.dropdown li .d-spec {
+  color: var(--text-2);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dropdown li .d-stock {
+  color: var(--primary);
+  font-weight: 600;
+  white-space: nowrap;
+  font-size: 13px;
+}
+/* 销售下拉：卖价（design.md §3.3 登记销售） */
+.dropdown li .d-price {
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dropdown li.d-empty {
+  color: var(--text-2);
+  justify-content: center;
+}
+
+/* OCR 入口按钮组 */
+.ocr-entry {
+  display: flex;
+  gap: 10px;
+  padding: 4px 14px 14px;
+}
+.ocr-entry .btn {
+  flex: 1;
+  min-height: 52px;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  border: 1px solid #bce4d4;
+}
+.ocr-entry .btn:active {
+  background: #d6efe4;
+}
+
+/* 分区标题 */
+.section-title {
+  font-size: 13px;
+  color: var(--text-2);
+  padding: 10px 16px 4px;
+  font-weight: 600;
+}
+
+/* ---------------- 底部 Tab 栏 ---------------- */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  display: flex;
+  max-width: 480px;
+  margin: 0 auto;
+  padding-bottom: var(--safe-bottom);
+}
+.tabbar button {
+  flex: 1;
+  min-height: var(--tabbar-h);
+  border: none;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text-2);
+  font-family: inherit;
+}
+.tabbar button .tab-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+.tabbar button.active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ---------------- 销售记录 ---------------- */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+.filter-bar .input {
+  flex: 1;
+  min-height: 42px;
+  font-size: 14px;
+}
+.filter-bar .select {
+  width: 104px;
+  min-height: 42px;
+  font-size: 14px;
+}
+
+.rec-item {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 12px 14px;
+  margin: 0 12px 10px;
+}
+.rec-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  gap: 8px;
+}
+.rec-time {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.rec-source {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.rec-source.manual {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+.rec-source.ocr {
+  background: #eef2ff;
+  color: #3b5bdb;
+}
+.rec-body {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+.rec-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+.rec-spec {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.rec-qty {
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--danger);
+}
+.rec-qty small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-2);
+}
+.rec-note {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* 销售记录：单价 / 金额小计（design.md §3.3） */
+.rec-price {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.rec-price .rec-amount {
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+.rec-price .rec-noprice {
+  color: #b6c1bc;
+}
+
+/* ---------------- 弹层（移动端底部弹出） ---------------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(15, 25, 21, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.modal-card {
+  background: var(--card);
+  width: 100%;
+  max-width: 480px;
+  border-radius: 16px 16px 0 0;
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 16px 16px calc(16px + var(--safe-bottom));
+  animation: slide-up 0.18s ease-out;
+}
+.modal-card.center {
+  border-radius: 16px;
+  margin-bottom: 8vh;
+  align-self: center;
+}
+@keyframes slide-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-close {
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  color: var(--text-2);
+}
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+.modal-actions .btn {
+  flex: 1;
+}
+
+/* OCR 确认列表 */
+.ocr-row {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #fff;
+}
+.ocr-row .ocr-row-raw {
+  font-size: 13px;
+  color: var(--text-2);
+  background: #f2f5f4;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+.ocr-row .ocr-row-fields {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ocr-row .select {
+  flex: 1;
+  min-height: 44px;
+  font-size: 14px;
+}
+.ocr-row .qty-input {
+  width: 74px;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 16px;
+  text-align: center;
+  font-family: inherit;
+}
+.ocr-row .qty-input:focus {
+  outline: 2px solid var(--primary);
+  border-color: var(--primary);
+}
+.ocr-row .row-del {
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  font-size: 17px;
+  color: var(--text-2);
+  border-radius: 8px;
+}
+.ocr-row .row-del:active {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+.ocr-summary {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: 10px;
+}
+
+/* 加载进度 */
+.progress-wrap {
+  text-align: center;
+  padding: 12px 0 4px;
+}
+.progress-text {
+  font-size: 14px;
+  color: var(--text-2);
+  margin-bottom: 12px;
+}
+.progress-bar {
+  height: 8px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress-bar .fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+  transition: width 0.2s;
+}
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 4px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  margin: 6px auto 14px;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 导入概要 */
+.import-summary {
+  background: var(--primary-light);
+  border: 1px solid #bce4d4;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 14px;
+  margin: 6px 0 2px;
+  line-height: 1.8;
+}
+.import-warn {
+  color: var(--danger);
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+/* 关于 */
+.about-text {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.9;
+}
+.about-text h3 {
+  font-size: 15px;
+  margin: 14px 0 4px;
+  color: var(--primary-dark);
+}
+.about-text p {
+  color: var(--text-2);
+}
+
+/* ---------------- Toast ---------------- */
+#toast-container {
+  position: fixed;
+  top: 16px;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 100;
+  pointer-events: none;
+}
+.toast {
+  max-width: 86vw;
+  background: rgba(28, 40, 35, 0.92);
+  color: #fff;
+  font-size: 14px;
+  border-radius: 10px;
+  padding: 10px 18px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  animation: toast-in 0.2s ease-out;
+  text-align: center;
+}
+.toast.success {
+  background: rgba(26, 156, 110, 0.95);
+}
+.toast.error {
+  background: rgba(231, 76, 60, 0.95);
+}
+@keyframes toast-in {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ---------------- 条码扫码（US-15 / AC48~AC49） ---------------- */
+/* 登记销售页「扫码选药」入口 */
+.scan-sell-entry {
+  padding: 0 14px 14px;
+}
+.scan-sell-entry .btn {
+  width: 100%;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  border: 1px solid #bce4d4;
+}
+.scan-sell-entry .btn:active {
+  background: #d6efe4;
+}
+
+/* 药品表单：条码输入 + 扫码按钮同行 */
+.barcode-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.barcode-row .input {
+  flex: 1;
+  min-width: 0;
+}
+.barcode-row .btn-scan {
+  flex-shrink: 0;
+  min-width: 96px;
+  min-height: 46px;
+  padding: 0 14px;
+  font-size: 15px;
+}
+
+/* 单位输入框（datalist 常用建议，US-13 / AC45）：右侧下拉小箭头提示可点选建议 */
+input[list].input {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%236b7a74' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 34px;
+}
+
+/* 扫码弹层 */
+.scan-card {
+  text-align: center;
+}
+.scan-viewport {
+  width: 100%;
+  max-width: 420px;
+  height: 260px;
+  margin: 0 auto 10px;
+  background: #1c2823;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+.scan-viewport video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.scan-status {
+  font-size: 14px;
+  color: var(--text-2);
+  margin-bottom: 6px;
+}
+.scan-status.error {
+  color: var(--danger);
+  font-weight: 600;
+}
+.scan-fallback {
+  margin-bottom: 10px;
+}
+
+/* ---------------- 桌面端留白 ---------------- */
+@media (min-width: 481px) {
+  body {
+    background: #e8eeea;
+  }
+  .app {
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.08);
+    background: var(--bg);
+  }
+  .modal-card {
+    border-radius: 16px;
+    margin-bottom: 12vh;
+    align-self: center;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.24);
+  }
+}
+
+/* ---------------- 桌面端适配（US-16 / AC51，≥768px） ---------------- */
+@media (min-width: 768px) {
+  /* 内容区加宽至 960px（design.md §3.8） */
+  .app {
+    max-width: 960px;
+  }
+  .tabbar {
+    max-width: 960px;
+  }
+
+  /* 药品 / 耗材列表：自适应多列网格 */
+  #inventory-list.list,
+  #consumable-list.list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  /* 表单 / 弹层（modal-card）居中加宽 ≤640px */
+  .modal-card {
+    max-width: 640px;
+  }
+  .modal-card.center {
+    max-width: 460px;
+  }
+  .scan-viewport {
+    height: 320px;
+  }
+
+  /* 桌面字体/间距微调 */
+  .topbar {
+    padding: 18px 18px 12px;
+  }
+  .topbar h1 {
+    font-size: 22px;
+  }
+  .list {
+    padding: 6px 18px 16px;
+  }
+  .rec-item,
+  .op-item-card {
+    margin-left: 18px;
+    margin-right: 18px;
+  }
+  .stats-note,
+  .section-title {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  /* 按钮悬停效果（手机端保持 :active 不变，§3.8） */
+  .btn-primary:hover {
+    background: var(--primary-dark);
+  }
+  .btn-primary:disabled:hover {
+    background: #b9cfc6;
+  }
+  .btn-danger:hover {
+    background: #d63a2b;
+  }
+  .btn-ghost:hover {
+    background: #f2f5f4;
+  }
+  .icon-btn:hover {
+    background: #e2eae6;
+  }
+  .menu-popup button:hover {
+    background: var(--primary-light);
+  }
+  .dropdown li:hover {
+    background: var(--primary-light);
+  }
+  .card-del:hover {
+    background: var(--danger-light);
+    color: var(--danger);
+  }
+  .btn-mini:hover {
+    background: var(--primary-light);
+  }
+  .seg-tab:hover:not(.active),
+  .stats-tab:hover:not(.active) {
+    background: var(--primary-light);
+    border-color: var(--primary);
+    color: var(--primary-dark);
+  }
+  .stat-head-sort > span:hover {
+    color: var(--primary);
+  }
+  .ocr-entry .btn:hover,
+  .scan-sell-entry .btn:hover {
+    background: #d6efe4;
+  }
+  .barcode-row .btn-scan:hover {
+    background: #f2f5f4;
+  }
+}
+
+/* ---------------- 统计（US-8 / AC27~AC29） ---------------- */
+.stats-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 4px 14px 12px;
+}
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-card .stat-label {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.stat-card .stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  word-break: break-all;
+}
+.stat-card .stat-value.profit {
+  color: var(--primary-dark);
+}
+
+.stats-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 2px 14px 10px;
+}
+.stats-tab {
+  flex: 1;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+}
+.stats-tab.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.stats-filter {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.stats-filter .select {
+  width: 122px;
+  min-height: 42px;
+  font-size: 14px;
+}
+.stats-filter .input {
+  flex: 1;
+  min-width: 132px;
+  min-height: 42px;
+  font-size: 14px;
+}
+.stats-range-sep {
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.stat-table {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 0 14px 12px;
+  overflow: hidden;
+}
+.stat-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.stat-row:last-child {
+  border-bottom: none;
+}
+.stat-row > span {
+  flex: 1;
+  min-width: 0;
+}
+.stat-row > span:first-child {
+  flex: 2;
+}
+.stat-head {
+  background: #f2f7f5;
+  color: var(--text-2);
+  font-weight: 600;
+  font-size: 12px;
+}
+.stat-head-sort > span {
+  cursor: pointer;
+}
+.stat-head-sort > span:active {
+  color: var(--primary);
+}
+.stat-drug {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stat-tag {
+  color: #b6c1bc;
+}
+.stat-drug .stat-spec {
+  color: var(--text-2);
+}
+
+.stats-note {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.7;
+  padding: 2px 16px 10px;
+}
+
+/* ---------------- 通用 segment 切换（医疗 Tab / 统计 Tab，v3） ---------------- */
+.seg-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 2px 14px 10px;
+}
+.seg-tab {
+  flex: 1;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+}
+.seg-tab.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* ---------------- 药品有效期（US-12 / AC39~AC41） ---------------- */
+.card-expiry {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.card-expiry .expiry-date {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.expiry-tag {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.expiry-tag.expiring {
+  background: #fff3e0;
+  color: #e67e22;
+  border: 1px solid #f5c98a;
+}
+.expiry-tag.expired {
+  background: #fdecea;
+  color: var(--danger);
+  border: 1px solid #f0b0a8;
+}
+
+/* ---------------- 销售/OCR 混选下拉：类型标签与过期禁用（AC41/AC43） ---------------- */
+.dropdown li .d-type {
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.dropdown li .d-type.drug {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+.dropdown li .d-type.consumable {
+  background: #eef2ff;
+  color: #3b5bdb;
+}
+.dropdown li.disabled {
+  opacity: 0.55;
+}
+.dropdown li .d-expired {
+  color: var(--danger);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---------------- 耗材卡片（US-9 / AC32~AC34） ---------------- */
+.card-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.btn-mini {
+  min-width: 56px;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--primary-dark);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+}
+.btn-mini:active {
+  background: var(--primary-light);
+}
+
+/* 进货/调整存量弹层 */
+.radio-row {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+.radio-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+/* ---------------- 医疗操作（US-10 / AC35~AC37） ---------------- */
+.op-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.op-item .select {
+  flex: 1;
+  min-height: 44px;
+  font-size: 14px;
+}
+.op-item .qty-input {
+  width: 70px;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 16px;
+  text-align: center;
+  font-family: inherit;
+}
+.op-item .qty-input:focus {
+  outline: 2px solid var(--primary);
+  border-color: var(--primary);
+}
+.op-item .row-del {
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  font-size: 17px;
+  color: var(--text-2);
+  border-radius: 8px;
+}
+.op-item .row-del:active {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.op-item-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 12px 14px;
+  margin: 0 12px 10px;
+}
+.op-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.op-head .op-type {
+  font-weight: 700;
+  font-size: 15px;
+}
+.op-head .op-time {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.op-items {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 2px;
+  line-height: 1.7;
+}
+.op-note {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+
+/* ---------------- OCR 确认列表：过期阻止标记（AC41） ---------------- */
+.ocr-row-expired {
+  font-size: 12px;
+  color: var(--danger);
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+/* ---------------- 销售记录：类型标签（AC43/AC44） ---------------- */
+.rec-type {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.rec-type.drug {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+.rec-type.consumable {
+  background: #eef2ff;
+  color: #3b5bdb;
+}
+
+/* ---------------- 统计：条目类型标签（AC44） ---------------- */
+.stat-type {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-right: 4px;
+}
+.stat-type.drug {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+.stat-type.consumable {
+  background: #eef2ff;
+  color: #3b5bdb;
+}
+
+/* 隐藏元素 */
+[hidden] {
+  display: none !important;
+}
