@@ -66,6 +66,8 @@ jobs:
 
       - name: Declare scanner AAR in app module (AGP 8 forbids local AAR in library modules)
         run: |
+          # 0) 补入 ZXing 需要的 android.support.v4.content.LocalBroadcastManager（仅 5 个类，避免重引整个 support 库引发 androidx 冲突）
+          cp scripts/lbmanager.jar android/capacitor-cordova-android-plugins/src/main/libs/
           # 1) plugins 项目的 fileTree 不再收集 .aar（bundleDebugAar 会因本地 aar 依赖失败）
           sed -i "s|fileTree(dir: 'src/main/libs', include: \['\*.jar', '\*.aar'\])|fileTree(dir: 'src/main/libs', include: ['*.jar'])|" android/capacitor-cordova-android-plugins/build.gradle
           grep -q "include: \['\*.jar'\]" android/capacitor-cordova-android-plugins/build.gradle
