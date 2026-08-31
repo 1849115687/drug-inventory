@@ -66,7 +66,10 @@ jobs:
           # 1) plugins 项目的 fileTree 不再收集 .aar（bundleDebugAar 会因本地 aar 依赖失败）
           sed -i "s|fileTree(dir: 'src/main/libs', include: \['\*.jar', '\*.aar'\])|fileTree(dir: 'src/main/libs', include: ['*.jar'])|" android/capacitor-cordova-android-plugins/build.gradle
           grep -q "include: \['\*.jar'\]" android/capacitor-cordova-android-plugins/build.gradle
-          # 2) app 模块直接以文件形式依赖该 AAR（app 的 flatDir 已含插件 libs 路径）
+          # 2) 插件模块编译期以 compileOnly 引用 AAR（类只进编译 classpath，不进插件 AAR 输出）
+          sed -i "s|implementation fileTree(dir: 'src/main/libs', include: \['\*.jar'\])|&\n    compileOnly files('src/main/libs/barcodescanner-release-2.1.5.aar')|" android/capacitor-cordova-android-plugins/build.gradle
+          grep -q "compileOnly files('src/main/libs/barcodescanner-release-2.1.5.aar')" android/capacitor-cordova-android-plugins/build.gradle
+          # 3) app 模块直接以文件形式依赖该 AAR（app 的 flatDir 已含插件 libs 路径）
           sed -i "s|implementation fileTree(include: \['\*.jar'\], dir: 'libs')|&\n    implementation files('../capacitor-cordova-android-plugins/src/main/libs/barcodescanner-release-2.1.5.aar')|" android/app/build.gradle
           grep -q "barcodescanner-release-2.1.5.aar" android/app/build.gradle
 
