@@ -48,10 +48,10 @@ jobs:
           sed -i 's|mavenCentral()|mavenCentral()\n        maven { url "https://jitpack.io" }|' android/build.gradle
           grep -q "jitpack" android/build.gradle
 
-      - name: Patch barcode scanner plugin gradle for Gradle 8 (compile to implementation)
+      - name: Neutralize plugin custom gradle (AAR dependency moved to app module)
         run: |
-          sed -i "s|compile(name:'barcodescanner-release-2.1.5', ext:'aar')|implementation fileTree(dir: 'src/main/libs', include: ['*.aar'])|" node_modules/phonegap-plugin-barcodescanner/src/android/barcodescanner.gradle
-          grep -q "implementation fileTree" node_modules/phonegap-plugin-barcodescanner/src/android/barcodescanner.gradle
+          : > node_modules/phonegap-plugin-barcodescanner/src/android/barcodescanner.gradle
+          ! grep -q "compile(" node_modules/phonegap-plugin-barcodescanner/src/android/barcodescanner.gradle
 
       - name: Remove legacy support-v4 dependency from plugin (AndroidX conflict)
         run: |
@@ -60,6 +60,15 @@ jobs:
 
       - name: Sync web assets into Android project
         run: npx cap sync android
+
+      - name: Declare scanner AAR in app module (AGP 8 forbids local AAR in library modules)
+        run: |
+          # 1) plugins 项目的 fileTree 不再收集 .aar（bundleDebugAar 会因本地 aar 依赖失败）
+          sed -i "s|fileTree(dir: 'src/main/libs', include: \['\*.jar', '\*.aar'\])|fileTree(dir: 'src/main/libs', include: ['*.jar'])|" android/capacitor-cordova-android-plugins/build.gradle
+          grep -q "include: \['\*.jar'\]" android/capacitor-cordova-android-plugins/build.gradle
+          # 2) app 模块直接以文件形式依赖该 AAR（app 的 flatDir 已含插件 libs 路径）
+          sed -i "s|implementation fileTree(include: \['\*.jar'\], dir: 'libs')|&\n    implementation files('../capacitor-cordova-android-plugins/src/main/libs/barcodescanner-release-2.1.5.aar')|" android/app/build.gradle
+          grep -q "barcodescanner-release-2.1.5.aar" android/app/build.gradle
 
       - name: Build debug APK
         run: |
