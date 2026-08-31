@@ -2,7 +2,7 @@
 
 > 配套文档：`docs/requirements.md`（需求，已确认）、`docs/design.md`（设计）
 > 解析规则**唯一权威**：design.md §3.5（本测试不另立规则，仅引用并细化可测用例）
-> 自动化测试：`tests/parser.test.js`、`tests/storage.test.js`、`tests/scanner.test.js`、`tests/stats.test.js`，运行 `node --test "tests/*.test.js"`（126 用例：parser 23 + storage 56 + scanner 26 + stats 21）
+> 自动化测试：`tests/parser.test.js`、`tests/storage.test.js`、`tests/scanner.test.js`、`tests/stats.test.js`，运行 `node --test "tests/*.test.js"`（131 用例：parser 23 + storage 56 + scanner 31 + stats 21）
 
 ## 1. 测试用例（按用户故事映射）
 
@@ -215,7 +215,7 @@
 | T15-9 | US-15/AC50 | 新导出备份 | `formatVersion = 4` 且药品含 barcode 字段；导入 v1/v2/v3 旧备份 barcode 补 null（自动化：storage.test.js「导出」「导入 v1/v2/v3 备份」） |
 | T15-10 | US-15/AC48 | 扫码实现降级（无 BarcodeDetector） | 懒加载 html5-qrcode（CDN），加载失败/成功状态文案正确（自动化：scanner.test.js「loadFallback」「降级路径」） |
 | T15-11 | US-15 | 非 HTTPS / 非 localhost 环境点「扫码」 | 浏览器安全限制导致摄像头不可用 → 弹层提示「需 HTTPS 与摄像头权限」+ 手动输入兜底（自动化：scanner.test.js「原生路径：无 mediaDevices」） |
-| T15-12 | US-15/AC54 | **APK（Cordova）环境**点「扫码」（APK 内 WebView 无 BarcodeDetector、getUserMedia 不可用） | 检测到 cordova 原生环境 → 调用原生插件 `phonegap-plugin-barcodescanner`（`cordova.plugins.barcodeScanner.scan`，ZXing 随插件 AAR 内置打包、无需 JitPack/Google Play 服务）打开系统摄像头全屏扫码；命中 → 回调码值；取消（系统返回键）→ 回 idle 不报错；权限拒绝/插件缺失/未就绪/空码/同步异常 → 弹层提示失败 + 「手动输入条码」兜底（自动化：scanner.test.js「isCordova」「Cordova 分支」全部用例，D26） |
+| T15-12 | US-15/AC54 | **APK（Cordova）环境**点「扫码」（APK 内 WebView 无 BarcodeDetector、getUserMedia 不可用） | 检测到原生环境（`window.Capacitor.isNativePlatform()` 或 `window.cordova` 存在）→ 调用原生插件 `phonegap-plugin-barcodescanner`（`cordova.plugins.barcodeScanner.scan`，ZXing 随插件 AAR 内置打包、无需 JitPack/Google Play 服务）打开系统摄像头全屏扫码；命中 → 回调码值；取消（系统返回键）→ 回 idle 不报错；权限拒绝/插件缺失/空码/同步异常 → 弹层提示失败 + 「手动输入条码」兜底；**插件未就绪（cordova.js 已注入、插件尚未注册）→ 弹层显示「正在初始化扫码…」，每 200ms 轮询等待插件注册（上限 40 次 ≈ 8s，可取消）：就绪 → 正常扫码，超时 → 「未找到扫码插件，请手动输入条码」兜底**（自动化：scanner.test.js「isCordova」「isNativeCapacitor」「Cordova 分支」「原生路径（Capacitor 桥）/插件延迟注册/等待超时/等待中 stop」用例，D26） |
 
 ### US-16 桌面 App 适配与安装
 
@@ -289,7 +289,7 @@ node --test "tests/*.test.js"
 
 - `tests/parser.test.js`：覆盖上表 P1~P18 及 §3.5 全部分支；
 - `tests/storage.test.js`：覆盖 T1-7/11、T2-7、T3-4/5/6、T4-9、T5-4、T6-1/3/4/6/9/10/11/12/13/14、T7-3/5/7、T8-11、T9-1~T9-11、T10-1~T10-9、T12-1~T12-4、T13-1/3/7（单位任意值）、T14-1/2/3（空规格归一化/判重）、T15-8/9（条码唯一性、导出/导入 barcode）等存储层用例（药品/耗材 CRUD、销售混选、医疗操作、有效期、条码唯一性、**formatVersion 4 导出**、v1/v2/v3/v4 导入兼容、加载归一化、售价快照，localStorage 用 mock 注入，design.md §3.1）；
-- `tests/scanner.test.js`：覆盖 T15-10/11/12 及扫码封装（**isCordova 原生环境检测与 Cordova 分支（D26，phonegap-plugin-barcodescanner：命中归一化/取消回 idle/权限拒绝/插件缺失未就绪/空码/stop 幂等+迟到忽略/同步异常兜底）**、supportsNative 可用性、normalizeCode 码值归一化、matchByBarcode 纯本地匹配、loadFallback 主/备 CDN 懒加载与失败切换、原生/降级两条扫码路径的命中与停止、权限/无摄像头/容器不可用错误分支，环境注入 design.md §3.7）；
+- `tests/scanner.test.js`：覆盖 T15-10/11/12 及扫码封装（**isCordova / isNativeCapacitor 原生环境检测（D26，phonegap-plugin-barcodescanner：命中归一化/取消回 idle/权限拒绝/插件缺失/空码/stop 幂等+迟到忽略/同步异常兜底）**、**原生路径插件就绪时序（startCordovaPath：插件立即就绪直接扫码 / 延迟注册轮询等待 ≤8s（200ms×40）就绪后扫码 / 始终未注册超时 onError / 等待中 stop() 取消轮询且绝不起动摄像头，假定时器注入验证）**、supportsNative 可用性、normalizeCode 码值归一化、matchByBarcode 纯本地匹配、loadFallback 主/备 CDN 懒加载与失败切换、原生/降级两条扫码路径的命中与停止、权限/无摄像头/容器不可用错误分支，环境注入 design.md §3.7）；
 - `tests/stats.test.js`：覆盖 T8-1~T8-10、T8-12、T11-1~T11-6、T14-7（按条目 name/spec 聚合）及 D12/D13/D16 统计口径（汇总、按日期/按条目聚合、排序、分位精度、耗材使用统计，纯函数无 DOM）。
 
 浏览器端用例（弹层/交互/OCR/CDN）按第 1、2 节手动走查：375px 模拟器、HTTPS 部署 + 断网、微信内置浏览器。
