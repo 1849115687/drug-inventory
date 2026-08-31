@@ -126,7 +126,7 @@ node serve.js
 
 ## APK 安装（Android）
 
-- **获取**：代码推送到 GitHub 仓库后，Actions 工作流（`.github/workflows/build-apk.yml`）自动用 Capacitor 把 `deploy-dist/` 打包为调试签名 APK；在仓库 Actions 页面打开最新一次「Build APK」运行记录，底部 **Artifacts** 下载 `drug-inventory-apk`（约 15~20MB）。
+- **获取**：代码推送到 GitHub 仓库后，Actions 工作流（`.github/workflows/build-apk.yml`）自动用 Capacitor 把 `deploy-dist/` 打包为调试签名 APK；在仓库 Actions 页面打开最新一次「Build APK」运行记录，底部 **Artifacts** 下载 `drug-inventory-apk`（约 4.5MB，含原生扫码）。
 - **安装**：把 APK 传到手机（数据线/网盘/微信文件传输助手），点击安装——需允许「安装未知来源应用」（调试签名，个人使用足够）。
 - **更新**：修改功能并推送后重新触发构建（`workflow_dispatch` 手动触发或 push 自动），下载新 APK 覆盖安装即可（APK 内 WebView 数据通常保留）。
 - **数据迁移**：APK 内数据存于其 WebView 的 localStorage，**与网页版互相独立**。网页版 ↔ APK 之间用「导出备份 / 导入备份」迁移：网页版导出 JSON → 文件传到手机 → APK 内「⋮ → 导入备份」恢复（反之亦然）。
