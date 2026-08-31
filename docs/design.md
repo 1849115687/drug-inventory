@@ -211,6 +211,7 @@ idle
 
 - **纯本地**：只匹配自己库存中的条码字段，不联网、不查外部药品库（用户确认：先不做联网识别）；
 - **依赖**：`BarcodeDetector`（Android Chrome 支持）优先；不可用时懒加载 `html5-qrcode`（CDN，类似 OCR 模式，失败可重试/放弃）；**APK/Capacitor 环境**（WebView 无 BarcodeDetector、getUserMedia 实测不可用）→ 走原生扫码 `phonegap-plugin-barcodescanner`（8.1.0，cordova-plugin-barcodescanner 的维护版；**ZXing 随插件 AAR 内置打包，无 JitPack/Google 服务依赖**；scanner.js 经 `window.cordova.plugins.barcodeScanner` 调用，D26）；
+- **APK 插件就绪时序**：cordova 插件注册在应用启动后异步完成——用户启动 APK 后立即点「扫码」时 `window.cordova` 已存在而 `cordova.plugins.barcodeScanner` 尚未注册；原生路径（`window.Capacitor.isNativePlatform()` 为 true 或 `window.cordova` 存在）等待插件就绪：**每 200ms 轮询检查一次，上限 40 次（~8s），就绪后走原生扫码；等待期间用户关闭扫码弹层 → `Scanner.stop()` 取消轮询、绝不起动摄像头；超时 → 提示「未找到扫码插件，请手动输入条码」**（不降级浏览器路径，APK WebView 中 BarcodeDetector/getUserMedia 均不可用）；
 - **隐私**：扫码画面仅本地处理，不上传（符合 N6）。
 
 ### 3.8 桌面端适配（US-16，纯样式/文案，不改 schema）
