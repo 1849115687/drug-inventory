@@ -224,13 +224,15 @@ idle
 
 ### 3.9 APK 打包（US-17，GitHub Actions 云端构建）
 
-- **原理**：GitHub Actions（ubuntu runner 自带 Android SDK/JDK/Java）用 **Capacitor** 把网页版（webDir = `deploy-dist`）包装成 Android WebView 应用，`gradlew assembleDebug` 产出**调试签名 APK**（约 15~20MB，个人使用足够）；
+- **原理**：GitHub Actions（ubuntu runner 自带 Android SDK/JDK/Java）用 **Capacitor** 把网页版（webDir = `deploy-dist`）包装成 Android WebView 应用，`gradlew assembleDebug` 产出**调试签名 APK**（实测约 4.5MB，个人使用足够）；
 - **仓库结构**（**定案：与主仓库同仓库** `.github/workflows/build-apk.yml`；独立仓库 `drug-inventory-apk` 为备选）：
   - `capacitor.config.json`：`webDir: "deploy-dist"`、`appId: com.xiaodian.druginventory`、`appName: 药品库存管理`；
   - `package.json`：`@capacitor/core`、`@capacitor/cli`、`@capacitor/android`、`phonegap-plugin-barcodescanner`（仅构建依赖；后者供 APK 原生扫码，D26——**8.1.0 为 cordova-plugin-barcodescanner 的维护版：ZXing 随插件 AAR 内置、无 0.7.4 的「修改系统设置」write-settings 关卡、正常申请 CAMERA 权限、支持 config，JS API 相同**；替代不可用的 `@capacitor/barcode-scanner`：其 ZXing 依赖为 OutSystems 私有库（JitPack 401）、ML Kit 需 Google 服务）；
   - `.github/workflows/build-apk.yml`：push 触发 → checkout → setup-node → `npm ci` → `npx cap add android` → `npx cap sync` → `cd android && ./gradlew assembleDebug` → `actions/upload-artifact` 产出 APK（+ `workflow_dispatch` 手动触发）。**幂等与同步**：android/ 不提交、每次全新生成（`cap add` 前检查目录不存在）；**deploy-dist 随仓库提交**并与网页源码保持同步（或 workflow 在 `cap sync` 前先复制网页文件到 deploy-dist）；`cap add` 后注入 CAMERA 权限（见下）；
 - **权限与扫码**：Capacitor 默认 manifest **仅含 INTERNET**——workflow 在 `cap add` 后向 `AndroidManifest.xml` 注入 `<uses-permission android:name="android.permission.CAMERA"/>`（cordova 扫码插件亦自带 CAMERA 声明；**8.1.0 无 0.7.4 的 write-settings 关卡——旧版首次扫码会启动「修改系统设置」特殊权限页并报错，国内 ROM 必踩，D26 已换维护版**；workflow 现有 minSdk 提升至 26 步骤对 cordova 插件无害，保留）；**APK 内扫码不走网页摄像头**（WebView 不支持 getUserMedia，实测确认），scanner.js 检测到 cordova/Capacitor 环境时调用 `cordova.plugins.barcodeScanner`（D26；**ZXing 随插件 AAR 内置，无需 JitPack/Google 服务**）；数据存 APK 内 WebView 的 localStorage，**与网页版互相独立**（导出/导入迁移）；
 - **说明**：本机无 Android SDK，**APK 构建无法本地验证**——由 Actions 云端构建结果验证（构建失败时迭代修复 workflow）；APK 为补充交付，网页版 PWA 仍是体积最小、自动更新的首选。
+- **构建链补丁**（workflow 中 `cap add` 之后、构建之前的步骤，均幂等；正式版含以下全部）：① minSdk 提升至 26；② `AndroidManifest.xml` 注入 CAMERA 权限；③ 移除插件 `plugin.xml` 的 `com.android.support:support-v4` framework 声明（与 androidx.core 重复类冲突，实测 `checkDebugDuplicateClasses` 失败）；④ 清空插件自定义 gradle（`compile()` 语法已被 Gradle 8 移除）并将本地 AAR 依赖拆分——插件模块 `compileOnly files('src/main/libs/barcodescanner-release-2.1.5.aar')`（编译期类路径）+ app 模块 `implementation files('../capacitor-cordova-android-plugins/src/main/libs/...aar')`（AGP 8 禁止库模块直接依赖本地 AAR）；⑤ `scripts/lbmanager.jar` 复制进插件模块 `src/main/libs/`——**补入 `android.support.v4.content.LocalBroadcastManager`（4 类 + NonNull 注解，提取自 support-core-utils-27.1.1，ZXing CaptureActivity 必需而 androidx 无此兼容类，崩溃实测定位）**；该 jar 为手工打包（zip 条目必须正斜杠路径，Windows Compress-Archive/.NET ZipFile 会存反斜杠导致无效）；
+- **崩溃排查经过（留档）**：扫码点击即崩（`NoClassDefFoundError: LocalBroadcastManager`）→ 诊断阶段曾向 MainActivity 注入崩溃捕捉器（`Thread.setDefaultUncaughtExceptionHandler` 写 `getExternalFilesDir/crash.txt`，下次启动 AlertDialog 显示堆栈，用户截图定位）——**正式版已移除捕捉器**；同轮还修复了「未找到扫码插件」= cordova 插件 JS 异步注册的时序（scanner.js 轮询等待 ≤8s、可取消，用 `Capacitor.isNativePlatform()` 提前识别 APK 环境）。
 
 ## 4. 受影响文件清单
 
