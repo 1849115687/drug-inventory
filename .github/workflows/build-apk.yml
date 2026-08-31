@@ -30,6 +30,58 @@ jobs:
             npx cap add android
           fi
 
+      - name: Inject crash catcher into MainActivity (diagnose scan crash)
+        run: |
+          python3 - <<'PYEOF'
+import os
+p = 'android/app/src/main/java/com/xiaodian/druginventory/MainActivity.java'
+src = open(p).read()
+if 'crash.txt' not in src:
+    new = '''package com.xiaodian.druginventory;
+
+import android.os.Bundle;
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread thread, Throwable e) {
+                try {
+                    java.io.File f = new java.io.File(getExternalFilesDir(null), "crash.txt");
+                    java.io.PrintWriter w = new java.io.PrintWriter(f);
+                    e.printStackTrace(w);
+                    w.close();
+                } catch (Exception ignore) {}
+                android.os.Process.killProcess(android.os.Process.myPid());
+                System.exit(1);
+            }
+        });
+        super.onCreate(savedInstanceState);
+        try {
+            java.io.File f = new java.io.File(getExternalFilesDir(null), "crash.txt");
+            if (f.exists()) {
+                StringBuilder sb = new StringBuilder();
+                java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f));
+                String line;
+                while ((line = r.readLine()) != null) sb.append(line).append("\\n");
+                r.close();
+                f.delete();
+                new android.app.AlertDialog.Builder(this)
+                    .setTitle("上次崩溃的日志（请截图发我）")
+                    .setMessage(sb.toString())
+                    .setPositiveButton("知道了", null)
+                    .show();
+            }
+        } catch (Exception ignore) {}
+    }
+}
+'''
+    open(p, 'w').write(new)
+print('MainActivity patched:', 'crash.txt' in open(p).read())
+PYEOF
+
       - name: Bump minSdkVersion for barcode scanner plugin (requires 26)
         run: |
           sed -i 's/minSdkVersion = [0-9][0-9]*/minSdkVersion = 26/' android/variables.gradle
